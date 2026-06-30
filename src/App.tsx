@@ -16,7 +16,6 @@ import {
   AlignVerticalSpaceBetween,
   Bold,
   BringToFront,
-  ChartColumn,
   ChevronDown,
   Circle,
   Clock,
@@ -28,13 +27,11 @@ import {
   EyeOff,
   Folder,
   Grid2x2,
-  Home,
   Image as ImageIcon,
   Italic,
   Layers3,
   LayoutTemplate,
   Lock,
-  Maximize2,
   MessageCircle,
   MousePointer2,
   Palette,
@@ -44,7 +41,6 @@ import {
   Share2,
   Shapes,
   SquarePlus,
-  StickyNote,
   Square,
   Trash2,
   Triangle,
@@ -199,6 +195,14 @@ import {
   getExportMimeType,
   type ExportFormatId,
 } from "@/editor/export"
+import {
+  EditorContextSidebar,
+  EditorFooter,
+  EditorToolRail,
+  EditorTopBar,
+  EditorWorkspace,
+  type EditorToolItem,
+} from "@/components/editor/editor-shell"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -273,10 +277,10 @@ type SharedTemplatePersistence = {
 }
 type DocumentUpdater = EditorDocument | ((currentDocument: EditorDocument) => EditorDocument)
 
-const colorSwatches = ["#111827", "#ffffff", "#ef4444", "#f59e0b", "#14b8a6", "#3b82f6", "#8b5cf6"]
+const colorSwatches = ["#111827", "#ffffff", "#ef4444", "#f59e0b", "#14b8a6", "#3b82f6", "#9cff6d"]
 const backgroundSwatches = ["#ffffff", "#f8fafc", "#fef3c7", "#d9f99d", "#ccfbf1", "#dbeafe", "#ede9fe", "#111827"]
 const SHOW_INSPECTOR = true
-const SHAPE_DRAG_MIME = "application/x-vacan-shape"
+const SHAPE_DRAG_MIME = "application/x-bacan-shape"
 const MAX_CANVAS_PREVIEW_SIZE = 720
 const SNAP_THRESHOLD_SCREEN_PX = 8
 const AUTOSAVE_DELAY_MS = 900
@@ -331,7 +335,7 @@ const localPresencePersistence: PresencePersistence = {
   isEnabled: false,
   isLoading: false,
   clientId: "local",
-  color: "#8b5cf6",
+  color: "#9cff6d",
   collaborators: [],
   selectProject: () => undefined,
   heartbeat: async () => undefined,
@@ -361,14 +365,7 @@ type ToolId =
   | "background"
   | "comments"
 
-type SidebarTool = {
-  id: ToolId
-  label: string
-  shortLabel?: string
-  icon: LucideIcon
-}
-
-const sidebarTools: SidebarTool[] = [
+const sidebarTools: EditorToolItem<ToolId>[] = [
   { id: "templates", label: "Plantillas", icon: LayoutTemplate },
   { id: "layers", label: "Capas", icon: Layers3 },
   { id: "elements", label: "Elementos", icon: Shapes },
@@ -760,7 +757,7 @@ function EditableElement({
             width={element.width}
             height={element.height}
             listening={false}
-            stroke="#00c4cc"
+            stroke="#9cff6d"
             strokeWidth={4}
             dash={canTransform ? undefined : [20, 14]}
           />
@@ -770,8 +767,8 @@ function EditableElement({
         <Transformer
           ref={transformerRef}
           rotateEnabled
-          borderStroke="#00c4cc"
-          anchorStroke="#00c4cc"
+          borderStroke="#9cff6d"
+          anchorStroke="#9cff6d"
           anchorFill="#ffffff"
           anchorSize={10}
           boundBoxFunc={(oldBox, newBox) => {
@@ -797,10 +794,10 @@ function PanelSearch({
   onChange: (value: string) => void
 }) {
   return (
-    <label className="flex h-12 items-center gap-3 rounded-md border border-[#6d28d9]/70 bg-[#12141b] px-3 text-slate-300 focus-within:ring-2 focus-within:ring-[#7c3aed]/60">
-      <Search className="size-5 shrink-0" />
+    <label className="flex h-12 items-center gap-3 rounded-md border border-white/10 bg-[#0e1115] px-3 text-[#9aa5a1] shadow-inner shadow-black/20 focus-within:border-[#9cff6d]/50 focus-within:ring-2 focus-within:ring-[#9cff6d]/15">
+      <Search className="size-5 shrink-0 text-[#9cff6d]" />
       <input
-        className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-slate-500"
+        className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[#f6f7ef] outline-none placeholder:text-[#6f7a75]"
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -813,7 +810,7 @@ function TextPreset({ label, size, onClick }: { label: string; size: string; onC
   return (
     <button
       type="button"
-      className="flex h-16 w-full items-center rounded-md border border-white/10 bg-[#20222b] px-4 text-left font-bold text-white transition hover:border-[#8b5cf6]"
+      className="flex h-16 w-full items-center rounded-md border border-white/10 bg-[#181c20] px-4 text-left font-bold text-[#f6f7ef] transition hover:border-[#9cff6d]/55 hover:bg-[#1d2422]"
       onClick={onClick}
     >
       <span className={size}>{label}</span>
@@ -835,7 +832,7 @@ function ToolAction({
   return (
     <button
       type="button"
-      className="flex h-20 flex-col items-center justify-center gap-2 rounded-md border border-white/10 bg-[#20222b] text-xs font-semibold text-slate-200 transition hover:border-[#00c4cc] disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-20 flex-col items-center justify-center gap-2 rounded-md border border-white/10 bg-[#181c20] text-xs font-semibold text-[#cfd7d2] transition hover:border-[#9cff6d]/55 hover:bg-[#1d2422] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
       disabled={disabled}
       onClick={onClick}
     >
@@ -905,12 +902,12 @@ function SharedProjectPreview({
 
   return (
     <main className="min-h-screen bg-[#0d0e14] text-slate-100">
-      <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/10 bg-[#171922] px-4">
+      <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/10 bg-[#121619] px-4">
         <div className="min-w-0">
           <h1 className="truncate text-lg font-bold text-white">{projectName}</h1>
           <p className="text-xs text-slate-400">{accessLabel}</p>
         </div>
-        <Badge className="bg-[#00c4cc]/15 text-cyan-100">Compartido</Badge>
+        <Badge className="bg-[#9cff6d]/15 text-[#d8ffba]">Compartido</Badge>
       </header>
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10 px-4 py-8">
         {document.pages.map((page, pageIndex) => (
@@ -942,7 +939,7 @@ function SharedProjectRoute({ token }: { token: string }) {
   if (result === undefined) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#0d0e14] p-6 text-slate-100">
-        <div className="rounded-md border border-white/10 bg-[#171922] p-5 text-sm text-slate-300">
+        <div className="rounded-md border border-white/10 bg-[#121619] p-5 text-sm text-slate-300">
           Cargando proyecto compartido...
         </div>
       </main>
@@ -952,7 +949,7 @@ function SharedProjectRoute({ token }: { token: string }) {
   if (!result || !isEditorDocument(result.project.canvas)) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#0d0e14] p-6 text-slate-100">
-        <div className="rounded-md border border-white/10 bg-[#171922] p-5 text-sm text-slate-300">
+        <div className="rounded-md border border-white/10 bg-[#121619] p-5 text-sm text-slate-300">
           Link no disponible.
         </div>
       </main>
@@ -2140,7 +2137,7 @@ function EditorApp({
                   key={shape.type}
                   type="button"
                   draggable
-                  className="flex h-20 flex-col items-center justify-center gap-2 rounded-md border border-white/10 bg-[#20222b] text-xs font-semibold text-slate-200 transition hover:border-[#00c4cc]"
+                  className="flex h-20 flex-col items-center justify-center gap-2 rounded-md border border-white/10 bg-[#181c20] text-xs font-semibold text-slate-200 transition hover:border-[#9cff6d]"
                   onClick={() => addShape(shape.type)}
                   onDragStart={(event) => {
                     event.dataTransfer.effectAllowed = "copy"
@@ -2163,12 +2160,12 @@ function EditorApp({
           {renderPanelSearch("Busca capas")}
           <div className="space-y-2">
             {!activePage || activePage.elements.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 Agrega elementos para ver tus capas aqui.
               </div>
             ) : null}
             {activePage && activePage.elements.length > 0 && filteredLayerItems.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 No hay capas para esa busqueda.
               </div>
             ) : null}
@@ -2180,7 +2177,7 @@ function EditorApp({
                 <div
                   key={element.id}
                   className={`flex items-center gap-2 rounded-md border px-2 py-2 text-sm transition ${
-                    isLayerSelected ? "border-[#00c4cc] bg-[#132b35]" : "border-white/10 bg-[#20222b]"
+                    isLayerSelected ? "border-[#9cff6d] bg-[#17231d]" : "border-white/10 bg-[#181c20]"
                   }`}
                 >
                   <button
@@ -2246,7 +2243,7 @@ function EditorApp({
       return (
         <>
           {renderPanelSearch("Busca fuentes y combinaciones")}
-          <Button className="h-12 w-full bg-[#7c3aed] text-base font-bold hover:bg-[#6d28d9]" onClick={addText}>
+          <Button className="h-12 w-full bg-[#9cff6d] text-base font-bold text-[#09100d] hover:bg-[#8de85f]" onClick={addText}>
             <Type data-icon="inline-start" />
             Agregar caja de texto
           </Button>
@@ -2267,7 +2264,7 @@ function EditorApp({
           {renderPanelSearch(activeTool === "photos" ? "Busca fotos" : "Busca archivos")}
           <button
             type="button"
-            className="flex h-24 w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[#7c3aed] bg-[#201b2c] text-slate-100 transition hover:bg-[#2a2240]"
+            className="flex h-24 w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[#9cff6d] bg-[#151c18] text-slate-100 transition hover:bg-[#1d2a22]"
             onClick={() => fileInputRef.current?.click()}
           >
             <CloudUpload className="size-7" />
@@ -2282,19 +2279,19 @@ function EditorApp({
           ) : null}
           <div className="grid max-h-[42vh] grid-cols-2 gap-2 overflow-auto pr-1">
             {assetPersistence.isLoading ? (
-              <div className="col-span-2 rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="col-span-2 rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 Cargando biblioteca...
               </div>
             ) : null}
             {assets.length === 0 ? (
-              <div className="col-span-2 rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="col-span-2 rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 {assetPersistence.isEnabled
                   ? "Las imagenes guardadas en Convex apareceran aqui."
                   : "Las imagenes que subas apareceran aqui."}
               </div>
             ) : null}
             {assets.length > 0 && filteredAssets.length === 0 ? (
-              <div className="col-span-2 rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="col-span-2 rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 No hay archivos para esa busqueda.
               </div>
             ) : null}
@@ -2302,7 +2299,7 @@ function EditorApp({
               <button
                 key={asset.id}
                 type="button"
-                className="group overflow-hidden rounded-md border border-white/10 bg-[#20222b] text-left transition hover:border-[#00c4cc]"
+                className="group overflow-hidden rounded-md border border-white/10 bg-[#181c20] text-left transition hover:border-[#9cff6d]"
                 onClick={() => {
                   const image = new window.Image()
                   image.onload = () =>
@@ -2353,7 +2350,7 @@ function EditorApp({
               Nuevo
             </Button>
             <Button
-              className="bg-[#7c3aed] text-white hover:bg-[#6d28d9]"
+              className="bg-[#9cff6d] text-[#09100d] hover:bg-[#8de85f]"
               onClick={saveCurrentProject}
               disabled={!persistence.isEnabled || autosaveStatus === "saving"}
             >
@@ -2362,7 +2359,7 @@ function EditorApp({
             </Button>
           </div>
           {!persistence.isEnabled ? (
-            <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm leading-6 text-slate-400">
+            <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm leading-6 text-slate-400">
               Configura VITE_CONVEX_URL para guardar y abrir proyectos con Convex.
             </div>
           ) : null}
@@ -2371,7 +2368,7 @@ function EditorApp({
               {autosaveError}
             </div>
           ) : null}
-          <section className="space-y-2 rounded-md border border-white/10 bg-[#20222b] p-3">
+          <section className="space-y-2 rounded-md border border-white/10 bg-[#181c20] p-3">
             <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Versiones</h3>
             <Input
               value={versionLabel}
@@ -2403,7 +2400,7 @@ function EditorApp({
                 <button
                   key={version.id}
                   type="button"
-                  className="rounded-md border border-white/10 bg-[#171922] p-3 text-left transition hover:border-[#00c4cc]"
+                  className="rounded-md border border-white/10 bg-[#121619] p-3 text-left transition hover:border-[#9cff6d]"
                   onClick={() => void restoreProjectVersion(version.id)}
                 >
                   <span className="block truncate text-sm font-semibold text-white">{version.label}</span>
@@ -2417,12 +2414,12 @@ function EditorApp({
               ))}
             </div>
           </section>
-          <section className="space-y-2 rounded-md border border-white/10 bg-[#20222b] p-3">
+          <section className="space-y-2 rounded-md border border-white/10 bg-[#181c20] p-3">
             <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Compartir</h3>
             <select
               value={shareAccess}
               onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
-              className="h-8 w-full rounded-lg border border-white/10 bg-[#12141b] px-2 text-sm text-slate-100"
+              className="h-8 w-full rounded-lg border border-white/10 bg-[#0e1115] px-2 text-sm text-slate-100"
               disabled={!sharePersistence.isEnabled}
             >
               {SHARE_ACCESS_OPTIONS.map((option) => (
@@ -2455,7 +2452,7 @@ function EditorApp({
                 <div
                   key={share.id}
                   className={`rounded-md border p-3 ${
-                    share.isActive ? "border-white/10 bg-[#171922]" : "border-white/8 bg-[#12141b] opacity-70"
+                    share.isActive ? "border-white/10 bg-[#121619]" : "border-white/8 bg-[#0e1115] opacity-70"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -2497,17 +2494,17 @@ function EditorApp({
           </section>
           <div className="space-y-2">
             {persistence.isLoading ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 Cargando proyectos...
               </div>
             ) : null}
             {persistence.isEnabled && !persistence.isLoading && persistence.projects.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 Guarda tu primer diseno para verlo aqui.
               </div>
             ) : null}
             {persistence.projects.length > 0 && filteredProjects.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 No hay proyectos para esa busqueda.
               </div>
             ) : null}
@@ -2515,8 +2512,8 @@ function EditorApp({
               <button
                 key={project.id}
                 type="button"
-                className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left text-sm text-slate-200 transition hover:border-[#00c4cc] ${
-                  project.id === currentProjectId ? "border-[#00c4cc] bg-[#132b35]" : "border-white/10 bg-[#20222b]"
+                className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left text-sm text-slate-200 transition hover:border-[#9cff6d] ${
+                  project.id === currentProjectId ? "border-[#9cff6d] bg-[#17231d]" : "border-white/10 bg-[#181c20]"
                 }`}
                 onClick={() => {
                   void openProject(project.id)
@@ -2545,30 +2542,30 @@ function EditorApp({
         <>
           {renderPanelSearch("Busca comentarios")}
           {!commentPersistence.isEnabled ? (
-            <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm leading-6 text-slate-400">
+            <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm leading-6 text-slate-400">
               Configura VITE_CONVEX_URL para comentar con otros colaboradores.
             </div>
           ) : null}
           {commentPersistence.isEnabled && !currentProjectId ? (
-            <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm leading-6 text-slate-400">
+            <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm leading-6 text-slate-400">
               Guarda el proyecto antes de crear comentarios.
             </div>
           ) : null}
-          <div className="space-y-3 rounded-md border border-white/10 bg-[#20222b] p-3">
+          <div className="space-y-3 rounded-md border border-white/10 bg-[#181c20] p-3">
             <Input
               value={commentAuthor}
               onChange={(event) => setCommentAuthor(event.target.value)}
               placeholder="Tu nombre"
-              className="bg-[#12141b] text-slate-100"
+              className="bg-[#0e1115] text-slate-100"
             />
             <textarea
               value={commentBody}
               onChange={(event) => setCommentBody(event.target.value)}
               placeholder="Agrega un comentario"
-              className="min-h-24 w-full resize-none rounded-lg border border-white/10 bg-[#12141b] px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus-visible:border-[#7c3aed]"
+              className="min-h-24 w-full resize-none rounded-lg border border-white/10 bg-[#0e1115] px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus-visible:border-[#9cff6d]"
             />
             <Button
-              className="w-full bg-[#7c3aed] text-white hover:bg-[#6d28d9]"
+              className="w-full bg-[#9cff6d] text-[#09100d] hover:bg-[#8de85f]"
               onClick={() => {
                 void submitComment()
               }}
@@ -2585,17 +2582,17 @@ function EditorApp({
           ) : null}
           <div className="space-y-2">
             {commentsLoading ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 Cargando comentarios...
               </div>
             ) : null}
             {!commentsLoading && comments.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 Todavia no hay comentarios.
               </div>
             ) : null}
             {comments.length > 0 && filteredComments.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 No hay comentarios para esa busqueda.
               </div>
             ) : null}
@@ -2606,7 +2603,7 @@ function EditorApp({
                 : null
 
               return (
-                <article key={comment.id} className="rounded-md border border-white/10 bg-[#20222b] p-3">
+                <article key={comment.id} className="rounded-md border border-white/10 bg-[#181c20] p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-semibold text-white">{comment.authorName}</span>
                     <span className="shrink-0 text-xs text-slate-500">
@@ -2629,7 +2626,7 @@ function EditorApp({
       return (
         <>
           {renderPanelSearch("Busca herramientas")}
-          <div className="space-y-3 rounded-md border border-white/10 bg-[#20222b] p-3">
+          <div className="space-y-3 rounded-md border border-white/10 bg-[#181c20] p-3">
             <div className="space-y-2">
               <Label htmlFor="export-format" className="text-slate-300">Formato</Label>
               <select
@@ -2643,7 +2640,7 @@ function EditorApp({
                     }),
                   )
                 }
-                className="h-8 w-full rounded-lg border border-white/10 bg-[#12141b] px-2 text-sm text-slate-100"
+                className="h-8 w-full rounded-lg border border-white/10 bg-[#0e1115] px-2 text-sm text-slate-100"
               >
                 {EXPORT_FORMATS.map((format) => (
                   <option key={format.id} value={format.id}>
@@ -2695,7 +2692,7 @@ function EditorApp({
               <button
                 key={format.id}
                 type="button"
-                className="rounded-md border border-white/10 bg-[#20222b] px-3 py-3 text-left transition hover:border-[#00c4cc]"
+                className="rounded-md border border-white/10 bg-[#181c20] px-3 py-3 text-left transition hover:border-[#9cff6d]"
                 onClick={() => createBlankFormat(format.id)}
               >
                 <span className="block text-sm font-semibold text-white">{format.name}</span>
@@ -2713,7 +2710,7 @@ function EditorApp({
               <button
                 key={format.id}
                 type="button"
-                className="rounded-md border border-white/10 bg-[#171922] px-3 py-2 text-left text-xs font-semibold text-slate-300 transition hover:border-[#8b5cf6]"
+                className="rounded-md border border-white/10 bg-[#121619] px-3 py-2 text-left text-xs font-semibold text-slate-300 transition hover:border-[#9cff6d]"
                 onClick={() => resizeCurrentDocument(format.id)}
               >
                 {format.name}
@@ -2725,7 +2722,7 @@ function EditorApp({
           <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Plantillas</h3>
           <div className="grid gap-3">
             {filteredDesignTemplates.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 No hay plantillas para esa busqueda.
               </div>
             ) : null}
@@ -2733,7 +2730,7 @@ function EditorApp({
               <button
                 key={template.id}
                 type="button"
-                className="overflow-hidden rounded-md border border-white/10 bg-[#20222b] text-left transition hover:border-[#8b5cf6]"
+                className="overflow-hidden rounded-md border border-white/10 bg-[#181c20] text-left transition hover:border-[#9cff6d]"
                 onClick={() => applyTemplate(template.id)}
               >
                 <span className={`block h-24 bg-gradient-to-br ${template.accent}`} />
@@ -2745,7 +2742,7 @@ function EditorApp({
         </section>
         <section className="space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Compartidas</h3>
-          <div className="space-y-2 rounded-md border border-white/10 bg-[#20222b] p-3">
+          <div className="space-y-2 rounded-md border border-white/10 bg-[#181c20] p-3">
             <Input
               value={sharedTemplateName}
               placeholder={document.name}
@@ -2783,17 +2780,17 @@ function EditorApp({
 
           <div className="grid gap-2">
             {sharedTemplatePersistence.isLoading ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 Cargando plantillas compartidas...
               </div>
             ) : null}
             {!sharedTemplatePersistence.isLoading && sharedTemplatePersistence.templates.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 Todavia no hay plantillas compartidas.
               </div>
             ) : null}
             {sharedTemplatePersistence.templates.length > 0 && filteredSharedTemplates.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4 text-sm text-slate-400">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 No hay plantillas compartidas para esa busqueda.
               </div>
             ) : null}
@@ -2801,7 +2798,7 @@ function EditorApp({
               <button
                 key={template.id}
                 type="button"
-                className="rounded-md border border-white/10 bg-[#171922] p-3 text-left transition hover:border-[#00c4cc]"
+                className="rounded-md border border-white/10 bg-[#121619] p-3 text-left transition hover:border-[#9cff6d]"
                 onClick={() => void applySharedTemplate(template.id)}
               >
                 <span className="block truncate text-sm font-semibold text-white">{template.name}</span>
@@ -2820,9 +2817,9 @@ function EditorApp({
   if (workspaceView === "home") {
     return (
       <main className="min-h-screen bg-[#0d0e14] text-slate-100">
-        <header className="flex h-16 items-center justify-between border-b border-white/10 bg-[#171922] px-4">
+        <header className="flex h-16 items-center justify-between border-b border-white/10 bg-[#121619] px-4">
           <div className="min-w-0">
-            <h1 className="text-lg font-bold text-white">Vacan</h1>
+            <h1 className="text-lg font-bold text-white">Bacan</h1>
             <p className="text-xs text-slate-400">{workspaceStats.projectCount} proyectos guardados</p>
           </div>
           <Button className="bg-white text-slate-950 hover:bg-slate-100" onClick={() => setWorkspaceView("editor")}>
@@ -2843,12 +2840,12 @@ function EditorApp({
                 const Icon = item.icon
 
                 return (
-                  <article key={item.label} className="rounded-md border border-white/10 bg-[#171922] p-4">
+                  <article key={item.label} className="rounded-md border border-white/10 bg-[#121619] p-4">
                     <div className="mb-3 flex items-center justify-between">
                       <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                         {item.label}
                       </span>
-                      <Icon className="size-4 text-[#00c4cc]" />
+                      <Icon className="size-4 text-[#9cff6d]" />
                     </div>
                     <strong className="text-2xl text-white">{item.value}</strong>
                   </article>
@@ -2866,7 +2863,7 @@ function EditorApp({
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {recentProjects.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-white/15 bg-[#171922] p-5 text-sm text-slate-400">
+                  <div className="rounded-md border border-dashed border-white/15 bg-[#121619] p-5 text-sm text-slate-400">
                     No hay proyectos guardados.
                   </div>
                 ) : null}
@@ -2874,7 +2871,7 @@ function EditorApp({
                   <button
                     key={project.id}
                     type="button"
-                    className="rounded-md border border-white/10 bg-[#171922] p-4 text-left transition hover:border-[#00c4cc]"
+                    className="rounded-md border border-white/10 bg-[#121619] p-4 text-left transition hover:border-[#9cff6d]"
                     onClick={() => void openProject(project.id)}
                   >
                     <span className="block truncate text-sm font-semibold text-white">{project.name}</span>
@@ -2896,7 +2893,7 @@ function EditorApp({
                   <button
                     key={format.id}
                     type="button"
-                    className="rounded-md border border-white/10 bg-[#171922] p-4 text-left transition hover:border-[#8b5cf6]"
+                    className="rounded-md border border-white/10 bg-[#121619] p-4 text-left transition hover:border-[#9cff6d]"
                     onClick={() => createBlankFormat(format.id)}
                   >
                     <span className="block text-sm font-semibold text-white">{format.name}</span>
@@ -2919,7 +2916,7 @@ function EditorApp({
                 <button
                   key={template.id}
                   type="button"
-                  className="overflow-hidden rounded-md border border-white/10 bg-[#171922] text-left transition hover:border-[#8b5cf6]"
+                  className="overflow-hidden rounded-md border border-white/10 bg-[#121619] text-left transition hover:border-[#9cff6d]"
                   onClick={() => applyTemplate(template.id)}
                 >
                   <span className={`block h-20 bg-gradient-to-br ${template.accent}`} />
@@ -2931,7 +2928,7 @@ function EditorApp({
                 <button
                   key={template.id}
                   type="button"
-                  className="rounded-md border border-white/10 bg-[#171922] p-3 text-left transition hover:border-[#00c4cc]"
+                  className="rounded-md border border-white/10 bg-[#121619] p-3 text-left transition hover:border-[#9cff6d]"
                   onClick={() => void applySharedTemplate(template.id)}
                 >
                   <span className="block truncate text-sm font-semibold text-white">{template.name}</span>
@@ -2946,153 +2943,53 @@ function EditorApp({
   }
 
   return (
-    <main className="min-h-screen bg-[#0d0e14] text-slate-100">
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 bg-gradient-to-r from-[#00c4cc] via-[#3b82f6] to-[#7c3aed] px-3 text-white shadow-[0_1px_0_rgba(255,255,255,0.16)]">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={handleUpload}
-        />
-        <div className="flex min-w-0 items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon-lg"
-                variant="ghost"
-                className="text-white hover:bg-white/15"
-                aria-label="Inicio"
-                onClick={() => setWorkspaceView("home")}
-              >
-                <Home />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Inicio</TooltipContent>
-          </Tooltip>
-          <Button variant="ghost" className="hidden text-white hover:bg-white/15 sm:inline-flex">
-            Archivo
-          </Button>
-          <Button
-            variant="ghost"
-            className="hidden text-white hover:bg-white/15 sm:inline-flex"
-            onClick={saveCurrentProject}
-            disabled={!persistence.isEnabled || autosaveStatus === "saving"}
-          >
-            Guardar
-          </Button>
-          <Button
-            variant="ghost"
-            className="hidden text-white hover:bg-white/15 sm:inline-flex"
-            onClick={() => setActiveTool("templates")}
-          >
-            Redimensionar
-          </Button>
-          <Button variant="ghost" className="hidden text-white hover:bg-white/15 md:inline-flex">
-            <PenLine data-icon="inline-start" />
-            Editar
-            <ChevronDown data-icon="inline-end" />
-          </Button>
-          <Badge className="hidden border-white/20 bg-white/16 text-white sm:inline-flex">{autosaveLabel}</Badge>
-        </div>
-
-        <div className="flex min-w-0 flex-1 justify-center">
-          <Input
-            value={document.name}
-            onChange={(event) => setDocumentName(event.target.value)}
-            className="h-9 max-w-[360px] border-transparent bg-white/10 text-center text-sm font-semibold text-white placeholder:text-white/60 focus-visible:border-white/40 focus-visible:ring-white/30"
-            aria-label="Nombre del diseno"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button className="hidden bg-white/12 text-white hover:bg-white/20 md:inline-flex" size="sm">
-            <Crown data-icon="inline-start" />
-            Sube de categoria
-          </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button size="icon-lg" variant="ghost" className="text-white hover:bg-white/15" aria-label="Metricas">
-                <ChartColumn />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Metricas</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon-lg"
-                variant="ghost"
-                className="text-white hover:bg-white/15"
-                aria-label="Comentarios"
-                onClick={() => setActiveTool("comments")}
-              >
-                <MessageCircle />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Comentarios</TooltipContent>
-          </Tooltip>
-          <Button className="bg-white text-slate-950 shadow-sm hover:bg-slate-100" onClick={exportActivePage} disabled={totalElements === 0}>
-            Compartir
-          </Button>
-        </div>
-      </header>
+    <main className="min-h-screen bg-[#0d1012] text-[#f6f7ef]">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleUpload}
+      />
+      <EditorTopBar
+        autosaveLabel={autosaveLabel}
+        canSave={persistence.isEnabled && autosaveStatus !== "saving"}
+        canShare={totalElements > 0}
+        documentName={document.name}
+        onComments={() => setActiveTool("comments")}
+        onDocumentNameChange={setDocumentName}
+        onHome={() => setWorkspaceView("home")}
+        onResize={() => setActiveTool("templates")}
+        onSave={saveCurrentProject}
+        onShare={exportActivePage}
+      />
 
       <div className="grid min-h-[calc(100vh-4rem)] grid-cols-[76px_minmax(0,1fr)] lg:grid-cols-[76px_320px_minmax(0,1fr)] xl:grid-cols-[76px_320px_minmax(0,1fr)_320px]">
-        <aside className="relative z-20 border-r border-white/8 bg-[#0b0c11] py-3">
-          <nav className="flex flex-col items-center gap-1">
-            {sidebarTools.map((tool) => {
-              const Icon = tool.icon
-              const isActive = activeTool === tool.id
+        <EditorToolRail activeTool={activeTool} tools={sidebarTools} onSelectTool={setActiveTool} />
 
-              return (
-                <button
-                  key={tool.id}
-                  type="button"
-                  className={`flex h-[72px] w-full flex-col items-center justify-center gap-1 px-1 text-[11px] font-bold transition ${
-                    isActive
-                      ? "bg-[#242536] text-white"
-                      : "text-slate-400 hover:bg-[#171922] hover:text-white"
-                  }`}
-                  onMouseEnter={() => setActiveTool(tool.id)}
-                  onClick={() => setActiveTool(tool.id)}
-                >
-                  <span className={`grid size-8 place-items-center rounded-md ${isActive ? "bg-[#7c3aed]/28 text-[#c084fc]" : ""}`}>
-                    <Icon className="size-5" />
-                  </span>
-                  <span className="w-full truncate px-1 text-center">{tool.shortLabel ?? tool.label}</span>
-                </button>
-              )
-            })}
-          </nav>
-        </aside>
+        <EditorContextSidebar
+          title={sidebarTools.find((tool) => tool.id === activeTool)?.label ?? "Herramientas"}
+          badgeLabel={`${assets.length} assets`}
+        >
+          {renderToolPanel()}
+        </EditorContextSidebar>
 
-        <aside className="hidden overflow-y-auto border-r border-white/8 bg-[#171922] p-4 shadow-[18px_0_40px_rgba(0,0,0,0.22)] lg:block">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white">
-              {sidebarTools.find((tool) => tool.id === activeTool)?.label}
-            </h2>
-            <Badge className="border-white/10 bg-white/8 text-slate-200">{assets.length} assets</Badge>
-          </div>
-          <div className="space-y-4">{renderToolPanel()}</div>
-        </aside>
-
-        <section className="flex min-w-0 flex-col bg-[#0d0e14]">
-          <div className="flex h-12 items-center justify-between border-b border-white/8 bg-[#0f1017] px-4">
-            <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
-              <span>{documentSize.width} x {documentSize.height}px</span>
-              <span>{document.pages.length} paginas</span>
-              <span>{totalElements} elementos</span>
-            </div>
-            <div className="flex items-center gap-1 text-slate-300">
-              {remoteCollaborators.length > 0 ? (
-                <div className="mr-2 flex items-center -space-x-2">
+        <EditorWorkspace
+          viewportRef={canvasViewportRef}
+          stats={[
+            `${documentSize.width} x ${documentSize.height}px`,
+            `${document.pages.length} paginas`,
+            `${totalElements} elementos`,
+          ]}
+          toolbarLeading={
+            remoteCollaborators.length > 0 ? (
+              <div className="mr-2 flex items-center -space-x-2">
                   {remoteCollaborators.slice(0, 4).map((collaborator) => (
                     <Tooltip key={collaborator.id}>
                       <TooltipTrigger asChild>
                         <span
-                          className="grid size-7 place-items-center rounded-full border border-[#0f1017] text-[10px] font-bold text-white"
+                          className="grid size-7 place-items-center rounded-full border border-[#101417] text-[10px] font-bold text-white"
                           style={{ backgroundColor: collaborator.color }}
                         >
                           {collaborator.displayName.slice(0, 1).toUpperCase()}
@@ -3109,12 +3006,15 @@ function EditorApp({
                       +{remoteCollaborators.length - 4}
                     </span>
                   ) : null}
-                </div>
-              ) : null}
+              </div>
+            ) : null
+          }
+          toolbarActions={
+            <>
               <Button
                 size="icon-sm"
                 variant="ghost"
-                className="text-slate-300 hover:bg-white/10"
+                className="text-[#cfd7d2] hover:bg-white/10"
                 aria-label="Deshacer"
                 onClick={undoDocument}
                 disabled={!canUndo}
@@ -3124,7 +3024,7 @@ function EditorApp({
               <Button
                 size="icon-sm"
                 variant="ghost"
-                className="text-slate-300 hover:bg-white/10"
+                className="text-[#cfd7d2] hover:bg-white/10"
                 aria-label="Rehacer"
                 onClick={redoDocument}
                 disabled={!canRedo}
@@ -3134,48 +3034,53 @@ function EditorApp({
               <Button
                 size="icon-sm"
                 variant="ghost"
-                className="text-slate-300 hover:bg-white/10"
+                className="text-[#cfd7d2] hover:bg-white/10"
                 aria-label={allSelectedLocked ? "Desbloquear" : "Bloquear"}
                 onClick={toggleSelectedLocked}
                 disabled={!hasSelection}
               >
                 <Lock />
               </Button>
-              <Button size="icon-sm" variant="ghost" className="text-slate-300 hover:bg-white/10" aria-label="Duplicar" onClick={duplicateSelected} disabled={!hasSelection}>
+              <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Duplicar" onClick={duplicateSelected} disabled={!hasSelection}>
                 <CopyPlus />
               </Button>
-              <Button size="icon-sm" variant="ghost" className="text-slate-300 hover:bg-white/10" aria-label="Agregar pagina" onClick={addNewPage}>
+              <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Agregar pagina" onClick={addNewPage}>
                 <SquarePlus />
               </Button>
-            </div>
-          </div>
-
-          <div ref={canvasViewportRef} className="flex flex-1 justify-center overflow-auto px-4 py-8">
+            </>
+          }
+          footer={
+            <EditorFooter
+              activePageLabel={`${resolvedActivePageId ? document.pages.findIndex((page) => page.id === resolvedActivePageId) + 1 : 1} de ${document.pages.length}`}
+              zoomLabel="61%"
+            />
+          }
+        >
             <div className="flex w-full max-w-[1120px] flex-col items-center gap-10">
               {document.pages.map((page, pageIndex) => (
-                <section key={page.id} className={`w-full ${page.id === animatingPageId ? "vacan-page-enter" : ""}`}>
-                  <div className="mx-auto mb-3 flex items-center justify-between text-slate-300" style={{ width: canvasPreviewWidth }}>
+                <section key={page.id} className={`w-full ${page.id === animatingPageId ? "bacan-page-enter" : ""}`}>
+                  <div className="mx-auto mb-3 flex items-center justify-between text-[#cfd7d2]" style={{ width: canvasPreviewWidth }}>
                     <div className="flex items-center gap-2">
-                      <Badge className={page.id === resolvedActivePageId ? "bg-white text-slate-950" : "bg-white/10 text-slate-300"}>
+                      <Badge className={page.id === resolvedActivePageId ? "bg-[#dfffcf] text-[#09100d]" : "border-white/10 bg-white/8 text-[#cfd7d2]"}>
                         {pageIndex + 1}
                       </Badge>
                       <h2 className="text-sm font-bold">{page.name}</h2>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button size="icon-sm" variant="ghost" className="text-slate-300 hover:bg-white/10" aria-label="Bloquear pagina">
+                      <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Bloquear pagina">
                         <Lock />
                       </Button>
-                      <Button size="icon-sm" variant="ghost" className="text-slate-300 hover:bg-white/10" aria-label="Duplicar pagina" onClick={() => addNewPageAfter(page.id)}>
+                      <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Duplicar pagina" onClick={() => addNewPageAfter(page.id)}>
                         <CopyPlus />
                       </Button>
-                      <Button size="icon-sm" variant="ghost" className="text-slate-300 hover:bg-white/10" aria-label="Agregar pagina" onClick={() => addNewPageAfter(page.id)}>
+                      <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Agregar pagina" onClick={() => addNewPageAfter(page.id)}>
                         <SquarePlus />
                       </Button>
                     </div>
                   </div>
 
                   <div
-                    className="mx-auto w-fit bg-white shadow-[0_20px_60px_rgba(0,0,0,0.36)] ring-1 ring-black/40"
+                    className="mx-auto w-fit overflow-hidden rounded-[3px] bg-white shadow-[0_28px_80px_rgba(0,0,0,0.46)] ring-1 ring-white/10"
                     onDragOver={(event) => {
                       if (event.dataTransfer.types.includes(SHAPE_DRAG_MIME)) {
                         event.preventDefault()
@@ -3306,7 +3211,7 @@ function EditorApp({
                                     ? [guide.position, 0, guide.position, documentSize.height]
                                     : [0, guide.position, documentSize.width, guide.position]
                                 }
-                                stroke="#00c4cc"
+                                stroke="#9cff6d"
                                 strokeWidth={2}
                                 strokeScaleEnabled={false}
                                 dash={[18, 12]}
@@ -3320,8 +3225,8 @@ function EditorApp({
                             y={Math.min(dragSelectionBounds.y, dragSelectionBounds.y + dragSelectionBounds.height)}
                             width={Math.abs(dragSelectionBounds.width)}
                             height={Math.abs(dragSelectionBounds.height)}
-                            fill="rgba(0, 196, 204, 0.08)"
-                            stroke="#00c4cc"
+                            fill="rgba(156, 255, 109, 0.08)"
+                            stroke="#9cff6d"
                             strokeWidth={2}
                             dash={[18, 12]}
                             listening={false}
@@ -3331,10 +3236,10 @@ function EditorApp({
                     </Stage>
                   </div>
                   {pageIndex === document.pages.length - 1 ? (
-                    <div className="mx-auto mt-5 flex h-12 overflow-hidden rounded-md border border-white/35 bg-transparent text-slate-200" style={{ width: canvasPreviewWidth }}>
+                    <div className="mx-auto mt-5 flex h-12 overflow-hidden rounded-md border border-white/12 bg-[#101417] text-[#cfd7d2] shadow-[0_18px_36px_rgba(0,0,0,0.18)]" style={{ width: canvasPreviewWidth }}>
                       <button
                         type="button"
-                        className="flex flex-1 items-center justify-center gap-2 text-sm font-bold transition hover:bg-white/10"
+                        className="flex flex-1 items-center justify-center gap-2 text-sm font-bold transition hover:bg-[#9cff6d]/10 hover:text-[#dfffcf]"
                         onClick={() => addNewPageAfter(page.id)}
                       >
                         <Plus className="size-4" />
@@ -3342,7 +3247,7 @@ function EditorApp({
                       </button>
                       <button
                         type="button"
-                        className="grid w-12 place-items-center border-l border-white/35 transition hover:bg-white/10"
+                        className="grid w-12 place-items-center border-l border-white/12 transition hover:bg-[#9cff6d]/10 hover:text-[#dfffcf]"
                         onClick={() => addNewPageAfter(page.id)}
                         aria-label="Mas opciones de pagina"
                       >
@@ -3353,26 +3258,10 @@ function EditorApp({
                 </section>
               ))}
             </div>
-          </div>
-          <footer className="flex h-14 items-center justify-between border-t border-white/8 bg-[#0f1017] px-5 text-sm font-bold text-slate-400">
-            <div className="flex items-center gap-5">
-              <span className="flex items-center gap-2"><StickyNote className="size-4" />Notas</span>
-              <span className="flex items-center gap-2"><Clock className="size-4" />Temporizador</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="hidden h-1 w-44 rounded-full bg-white/20 md:block">
-                <div className="h-full w-[61%] rounded-full bg-white/70" />
-              </div>
-              <span>61%</span>
-              <span className="flex items-center gap-2"><Grid2x2 className="size-4" />Paginas</span>
-              <span>{resolvedActivePageId ? document.pages.findIndex((page) => page.id === resolvedActivePageId) + 1 : 1} de {document.pages.length}</span>
-              <Maximize2 className="size-4" />
-            </div>
-          </footer>
-        </section>
+        </EditorWorkspace>
 
         {SHOW_INSPECTOR ? (
-        <aside className="hidden border-l border-white/8 bg-[#171922] p-4 text-slate-100 xl:block">
+        <aside className="hidden border-l border-white/8 bg-[#121619] p-4 text-slate-100 xl:block">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-white">Inspector</h2>
@@ -3418,7 +3307,7 @@ function EditorApp({
 
           {hasMultiSelection ? (
             <div className="space-y-5">
-              <div className="rounded-md border border-white/10 bg-[#20222b] p-4">
+              <div className="rounded-md border border-white/10 bg-[#181c20] p-4">
                 <p className="text-sm font-semibold text-white">{selectedElementIds.length} capas seleccionadas</p>
                 <p className="pt-1 text-xs text-slate-400">
                   {selectedElements.map((element) => element.name).join(", ")}
@@ -3539,7 +3428,7 @@ function EditorApp({
 	                      onChange={(event) =>
 	                        updateSelected({ fontFamily: event.target.value as typeof selectedTextElement.fontFamily })
 	                      }
-	                      className="h-8 w-full rounded-lg border border-white/10 bg-[#12141b] px-2 text-sm text-slate-100"
+	                      className="h-8 w-full rounded-lg border border-white/10 bg-[#0e1115] px-2 text-sm text-slate-100"
                     >
                       {FONT_OPTIONS.map((fontFamily) => (
                         <option key={fontFamily} value={fontFamily}>
@@ -3929,7 +3818,7 @@ function EditorApp({
               </div>
             </div>
           ) : (
-	            <div className="rounded-md border border-dashed border-white/15 bg-[#20222b] p-4 text-sm leading-6 text-slate-400">
+	            <div className="rounded-md border border-dashed border-white/15 bg-[#181c20] p-4 text-sm leading-6 text-slate-400">
               Haz click en cualquier imagen, texto o forma para ver sus controladores y propiedades.
             </div>
           )}
@@ -4281,7 +4170,7 @@ function App() {
     if (!import.meta.env.VITE_CONVEX_URL) {
       return (
         <main className="grid min-h-screen place-items-center bg-[#0d0e14] p-6 text-slate-100">
-          <div className="rounded-md border border-white/10 bg-[#171922] p-5 text-sm text-slate-300">
+          <div className="rounded-md border border-white/10 bg-[#121619] p-5 text-sm text-slate-300">
             Convex no esta conectado.
           </div>
         </main>

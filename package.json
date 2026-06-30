@@ -1,5 +1,5 @@
 {
-  "name": "vacan",
+  "name": "bacan",
   "private": false,
   "version": "0.1.0",
   "description": "Open source Canva-inspired editor built with Convex, Vite, React, Tailwind and shadcn/ui.",

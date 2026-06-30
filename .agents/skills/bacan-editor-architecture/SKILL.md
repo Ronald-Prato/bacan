@@ -1,13 +1,13 @@
 ---
-name: vacan-editor-architecture
-description: Use when implementing, refactoring, or reviewing Vacan editor features so changes stay TDD-first, modular, Convex-safe, and maintainable across canvas, project persistence, templates, assets, export, and collaboration work.
+name: bacan-editor-architecture
+description: Use when implementing, refactoring, or reviewing Bacan editor features so changes stay TDD-first, modular, Convex-safe, and maintainable across canvas, project persistence, templates, assets, export, and collaboration work.
 ---
 
-# Vacan Editor Architecture
+# Bacan Editor Architecture
 
 ## Overview
 
-Use this skill for non-trivial Vacan feature work. It captures the local
+Use this skill for non-trivial Bacan feature work. It captures the local
 architecture rules that keep the Canva-like editor scalable while the product
 surface grows.
 

@@ -147,7 +147,7 @@
   }
 }
 
-@keyframes vacan-page-enter {
+@keyframes bacan-page-enter {
   0% {
     opacity: 0;
     transform: translateY(18px) scale(0.985);
@@ -158,6 +158,6 @@
   }
 }
 
-.vacan-page-enter {
-  animation: vacan-page-enter 360ms cubic-bezier(0.2, 0.85, 0.2, 1);
+.bacan-page-enter {
+  animation: bacan-page-enter 360ms cubic-bezier(0.2, 0.85, 0.2, 1);
 }

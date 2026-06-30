@@ -14,7 +14,7 @@ describe("export helpers", () => {
 
   it("builds safe filenames from document names", () => {
     expect(buildExportFileName("  Nuevo Lanzamiento  ", "png")).toBe("nuevo-lanzamiento.png")
-    expect(buildExportFileName("", "pdf")).toBe("vacan.pdf")
+    expect(buildExportFileName("", "pdf")).toBe("bacan.pdf")
   })
 
   it("returns the correct canvas mime type", () => {

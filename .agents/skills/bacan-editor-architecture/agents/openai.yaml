@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bacan Editor Architecture"
+  short_description: "Keep Bacan editor changes scalable and tested."
+  default_prompt: "Use $bacan-editor-architecture to implement a Bacan editor feature with TDD and clean boundaries."

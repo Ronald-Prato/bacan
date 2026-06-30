@@ -1,6 +1,6 @@
-# vacan
+# bacan
 
-vacan es un editor open source inspirado en Canva. El primer objetivo es tener un canvas central, subir imagenes y empezar a manipularlas como capas.
+bacan es un editor open source inspirado en Canva. El primer objetivo es tener un canvas central, subir imagenes y empezar a manipularlas como capas.
 
 ## Stack
 

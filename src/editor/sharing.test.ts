@@ -23,7 +23,7 @@ describe("project sharing helpers", () => {
   })
 
   it("builds stable share URLs without double slashes", () => {
-    expect(createShareUrl("https://vacan.app/", "abc123")).toBe("https://vacan.app/share/abc123")
+    expect(createShareUrl("https://bacan.app/", "abc123")).toBe("https://bacan.app/share/abc123")
   })
 
   it("extracts share tokens from app paths", () => {
@@ -57,14 +57,14 @@ describe("project sharing helpers", () => {
           createdAt: 100,
           revokedAt: 200,
         },
-        "https://vacan.app",
+        "https://bacan.app",
       ),
     ).toEqual({
       id: "share-1",
       projectId: "project-1",
       access: "edit",
       token: "token-1",
-      url: "https://vacan.app/share/token-1",
+      url: "https://bacan.app/share/token-1",
       createdAt: 100,
       revokedAt: 200,
       isActive: false,

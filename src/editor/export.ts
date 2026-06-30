@@ -34,7 +34,7 @@ export function buildExportFileName(documentName: string, format: ExportFormatId
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
 
-  return `${slug || "vacan"}.${extension}`
+  return `${slug || "bacan"}.${extension}`
 }
 
 export function getExportMimeType(format: ExportFormatId): "image/png" | "image/jpeg" {
