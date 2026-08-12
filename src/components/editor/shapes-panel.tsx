@@ -1,18 +1,18 @@
-import { ChevronLeft, ChevronRight, Mic, Plus, Search } from "lucide-react"
-import { useId, useMemo, useState, type CSSProperties, type DragEvent, type FormEvent, type ReactNode } from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useMemo, useState, type DragEvent, type ReactNode } from "react"
 
 import {
   SHAPE_CATEGORIES,
-  SHAPE_DRAG_MIME,
   SHAPE_OPTIONS,
   getShapeRenderDescriptor,
   listRecentShapes,
-  searchShapes,
   type PathCommand,
   type ShapeCatalogItem,
   type ShapeRenderDescriptor,
 } from "@/editor/shapes"
 import { cn } from "@/lib/utils"
+
+import { startShapeDrag } from "./shape-drag-preview"
 
 /**
  * The panel owns interaction state only. Shape geometry and catalog metadata
@@ -24,18 +24,14 @@ export type ShapesPanelProps = {
   items?: readonly ShapeCatalogItem[]
   onAddShape: (item: ShapeCatalogItem) => void
   onBack?: () => void
-  onGenerate?: (prompt: string) => void
-  onSearch?: (query: string) => void
-  generateDisabled?: boolean
   className?: string
 }
 
-const panelSurface = "var(--shapes-surface, var(--vacan-background, #1e1f26))"
-const panelForeground = "var(--shapes-foreground, var(--vacan-foreground, #f6f7ef))"
-const panelAccent = "var(--shapes-accent, var(--vacan-accent, #7434d5))"
-const panelMuted = "color-mix(in srgb, var(--shapes-foreground, var(--vacan-foreground, #f6f7ef)) 68%, transparent)"
-const panelBorder = "color-mix(in srgb, var(--shapes-foreground, var(--vacan-foreground, #f6f7ef)) 22%, transparent)"
-const panelSubsurface = "color-mix(in srgb, var(--shapes-foreground, var(--vacan-foreground, #f6f7ef)) 8%, var(--shapes-surface, var(--vacan-background, #1e1f26)))"
+const panelSurface = "var(--shapes-surface, var(--background))"
+const panelForeground = "var(--shapes-foreground, var(--foreground))"
+const panelMuted = "color-mix(in srgb, var(--shapes-foreground, var(--foreground)) 68%, transparent)"
+const panelBorder = "color-mix(in srgb, var(--shapes-foreground, var(--foreground)) 22%, transparent)"
+const panelSubsurface = "color-mix(in srgb, var(--shapes-foreground, var(--foreground)) 8%, var(--shapes-surface, var(--background)))"
 
 function assertNever(value: never): never {
   throw new Error(`Unsupported shape preview command: ${String(value)}`)
@@ -139,8 +135,7 @@ function ShapeTile({
   onAddShape: (item: ShapeCatalogItem) => void
 }) {
   const handleDragStart = (event: DragEvent<HTMLButtonElement>) => {
-    event.dataTransfer.effectAllowed = "copy"
-    event.dataTransfer.setData(SHAPE_DRAG_MIME, item.type)
+    startShapeDrag(event.dataTransfer, event.currentTarget, item)
   }
 
   return (
@@ -232,39 +227,20 @@ export function ShapesPanel({
   items = SHAPE_OPTIONS,
   onAddShape,
   onBack,
-  onGenerate,
-  onSearch,
-  generateDisabled = false,
   className,
 }: ShapesPanelProps) {
-  const formId = useId()
-  const inputId = useId()
-  const [query, setQuery] = useState("")
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null)
   const [liveMessage, setLiveMessage] = useState("")
   const [liveMessageId, setLiveMessageId] = useState(0)
   const recent = recentItems ?? listRecentShapes(recentShapeTypes, 5)
-  const matchingItems = useMemo(
-    () => (query.trim() ? searchShapes(query, items) : items),
-    [items, query],
-  )
   const categories = useMemo(
     () => SHAPE_CATEGORIES.map((category) => ({
       category,
-      items: category.isDynamic
-        ? (query.trim()
-          ? recent.filter((item) => matchingItems.some((match) => match.type === item.type))
-          : recent)
-        : matchingItems.filter((item) => item.category === category.id),
+      items: category.isDynamic ? recent : items.filter((item) => item.category === category.id),
     })),
-    [matchingItems, query, recent],
+    [items, recent],
   )
   const hasResults = categories.some(({ items: categoryItems }) => categoryItems.length > 0)
-
-  const submitSearch = (event?: FormEvent<HTMLFormElement>) => {
-    event?.preventDefault()
-    onSearch?.(query.trim())
-  }
 
   const handleAddShape = (item: ShapeCatalogItem) => {
     onAddShape(item)
@@ -275,13 +251,6 @@ export function ShapesPanel({
   return (
     <section
       className={cn("shapes-panel flex min-h-0 flex-col", className)}
-      style={{
-        backgroundColor: panelSurface,
-        color: panelForeground,
-        "--shapes-accent": "var(--vacan-accent, #7434d5)",
-        "--shapes-surface": "var(--vacan-background, #1e1f26)",
-        "--shapes-foreground": "var(--vacan-foreground, #f6f7ef)",
-      } as CSSProperties}
       aria-label="Formas"
     >
       <header className="shapes-panel__header shrink-0 space-y-4">
@@ -298,73 +267,12 @@ export function ShapesPanel({
           </button>
           <h1 className="text-base font-semibold">Formas</h1>
         </div>
-
-        <form id={formId} className="shapes-panel__prompt relative" onSubmit={submitSearch}>
-          <label htmlFor={inputId} className="sr-only">Describe tu elemento ideal</label>
-          <Plus className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2" style={{ color: panelForeground }} />
-          <input
-            id={inputId}
-            className="h-[59px] w-full rounded-2xl border bg-transparent pl-12 pr-12 text-sm outline-none placeholder:opacity-60 focus-visible:ring-2"
-            style={{ borderColor: panelAccent, color: panelForeground, outlineColor: panelAccent }}
-            value={query}
-            placeholder="Describe tu elemento ideal"
-            onChange={(event) => {
-              const nextQuery = event.target.value
-              setQuery(nextQuery)
-              if (!nextQuery.trim()) {
-                onSearch?.("")
-              }
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault()
-                setQuery("")
-                onSearch?.("")
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="absolute right-3 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-[var(--shapes-accent)]"
-            style={{ color: panelForeground }}
-            aria-label="Usar dictado por voz"
-            disabled
-          >
-            <Mic className="size-5" />
-          </button>
-        </form>
-
-        <div className="shapes-panel__actions grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            className="flex h-10 items-center justify-center gap-2 rounded-xl border text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ borderColor: panelBorder, backgroundColor: panelSubsurface, color: panelForeground }}
-            disabled={generateDisabled || !onGenerate || query.trim().length === 0}
-            onClick={() => {
-              if (onGenerate && query.trim()) {
-                onGenerate(query.trim())
-              }
-            }}
-          >
-            <Plus className="size-4" />
-            Generar
-          </button>
-          <button
-            type="submit"
-            form={formId}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ borderColor: panelAccent, backgroundColor: panelAccent, color: "var(--vacan-foreground, #ffffff)" }}
-          >
-            <Search className="size-4" />
-            Buscar
-          </button>
-        </div>
       </header>
 
       <div className="shapes-panel__catalog min-h-0 flex-1 overflow-y-auto overscroll-contain py-5" tabIndex={0}>
         {!hasResults ? (
           <p className="rounded-md border p-4 text-sm" style={{ borderColor: panelBorder, color: panelMuted }} role="status">
-            No encontramos formas para esa búsqueda.
+            No hay formas disponibles.
           </p>
         ) : null}
         <div className="space-y-7">
@@ -374,7 +282,6 @@ export function ShapesPanel({
               category={category}
               items={categoryItems}
               expanded={expandedCategoryId === category.id}
-              showViewAll={!query.trim()}
               onToggle={() => setExpandedCategoryId((current) => current === category.id ? null : category.id)}
               onAddShape={handleAddShape}
             />

@@ -1,11 +1,17 @@
 import { v } from "convex/values"
 
 import { mutation, query } from "./_generated/server"
+import { requireUserId } from "./auth"
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    const assets = await ctx.db.query("assets").withIndex("by_updatedAt").order("desc").take(100)
+    const ownerId = await requireUserId(ctx)
+    const assets = await ctx.db
+      .query("assets")
+      .withIndex("by_ownerId_and_updatedAt", (q) => q.eq("ownerId", ownerId))
+      .order("desc")
+      .take(100)
 
     return await Promise.all(
       assets.map(async (asset) => ({
@@ -25,9 +31,10 @@ export const get = query({
     id: v.id("assets"),
   },
   handler: async (ctx, args) => {
+    const ownerId = await requireUserId(ctx)
     const asset = await ctx.db.get(args.id)
 
-    if (!asset) {
+    if (!asset || asset.ownerId !== ownerId) {
       return null
     }
 
@@ -45,6 +52,7 @@ export const get = query({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireUserId(ctx)
     return await ctx.storage.generateUploadUrl()
   },
 })
@@ -57,9 +65,11 @@ export const save = mutation({
     size: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const ownerId = await requireUserId(ctx)
     const now = Date.now()
 
     return await ctx.db.insert("assets", {
+      ownerId,
       name: args.name,
       storageId: args.storageId,
       contentType: args.contentType,

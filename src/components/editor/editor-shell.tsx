@@ -15,9 +15,11 @@ export type EditorToolItem<TToolId extends string> = {
 }
 
 type EditorTopBarProps = {
+  accountMenu?: ReactNode
   autosaveLabel: string
   canSave: boolean
   documentName: string
+  exportControl?: ReactNode
   onComments: () => void
   onDocumentNameChange: (name: string) => void
   onHome: () => void
@@ -28,26 +30,27 @@ type EditorTopBarProps = {
 }
 
 export function EditorTopBar({
+  accountMenu,
   autosaveLabel,
   canSave,
   documentName,
+  exportControl,
   onComments,
   onDocumentNameChange,
   onHome,
-  onResize,
   onSave,
   onThemeChange,
   theme,
 }: EditorTopBarProps) {
   return (
-    <header className="editor-topbar sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-white/8 bg-[#101316] px-3 text-[#f6f7ef]">
+    <header className="editor-topbar sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-white/8 bg-[#101316] px-3 text-[#f6f7ef]">
       <div className="flex min-w-0 items-center gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               size="icon-lg"
               variant="ghost"
-              className="text-[#dce3d7] hover:bg-[#1a2020] hover:text-white"
+              className="editor-topbar__action text-[#dce3d7] hover:bg-[#1a2020] hover:text-white"
               aria-label="Inicio"
               onClick={onHome}
             >
@@ -58,20 +61,22 @@ export function EditorTopBar({
         </Tooltip>
         <Button
           variant="ghost"
-          className="hidden text-[#dce3d7] hover:bg-[#1a2020] hover:text-white sm:inline-flex"
+          className="editor-topbar__action hidden text-[#dce3d7] hover:bg-[#1a2020] hover:text-white sm:inline-flex"
           onClick={onSave}
           disabled={!canSave}
         >
           Guardar
         </Button>
+        {/* Redimensionado pausado hasta retomar la implementación de esta funcionalidad.
         <Button
           variant="ghost"
-          className="hidden text-[#dce3d7] hover:bg-[#1a2020] hover:text-white sm:inline-flex"
+          className="editor-topbar__action hidden text-[#dce3d7] hover:bg-[#1a2020] hover:text-white sm:inline-flex"
           onClick={onResize}
         >
           Redimensionar
         </Button>
-        <Badge className="hidden border-[#9cff6d]/25 bg-[#9cff6d]/10 text-[#d8ffba] sm:inline-flex">
+        */}
+        <Badge className="editor-topbar__status hidden border-[#9cff6d]/25 bg-[#9cff6d]/10 text-[#d8ffba] sm:inline-flex">
           {autosaveLabel}
         </Badge>
       </div>
@@ -86,6 +91,7 @@ export function EditorTopBar({
       </div>
 
       <div className="flex items-center gap-2">
+        {exportControl}
         <div className="editor-theme-switcher flex items-center rounded-lg border border-white/10 bg-white/5 p-1" aria-label="Tema del editor">
           <Button
             size="icon-sm"
@@ -113,7 +119,7 @@ export function EditorTopBar({
             <Button
               size="icon-lg"
               variant="ghost"
-              className="text-[#dce3d7] hover:bg-[#1a2020] hover:text-white"
+              className="editor-topbar__comments border border-transparent text-[#dce3d7] hover:bg-[#1a2020] hover:text-white"
               aria-label="Comentarios"
               onClick={onComments}
             >
@@ -122,6 +128,7 @@ export function EditorTopBar({
           </TooltipTrigger>
           <TooltipContent>Comentarios</TooltipContent>
         </Tooltip>
+        {accountMenu}
       </div>
     </header>
   )

@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 
 import { mutation, query } from "./_generated/server"
+import { requireUserIdentity, requireUserId } from "./auth"
 
 function countTemplateElements(canvas: unknown) {
   const candidate = canvas as { pages?: { elements?: unknown[] }[] } | null
@@ -25,6 +26,7 @@ function countTemplateElements(canvas: unknown) {
 export const list = query({
   args: {},
   handler: async (ctx) => {
+    await requireUserId(ctx)
     const templates = await ctx.db
       .query("sharedTemplates")
       .withIndex("by_createdAt")
@@ -48,6 +50,7 @@ export const get = query({
     id: v.id("sharedTemplates"),
   },
   handler: async (ctx, args) => {
+    await requireUserId(ctx)
     return await ctx.db.get(args.id)
   },
 })
@@ -60,12 +63,14 @@ export const create = mutation({
     canvas: v.any(),
   },
   handler: async (ctx, args) => {
+    const identity = await requireUserIdentity(ctx)
     const counts = countTemplateElements(args.canvas)
 
     return await ctx.db.insert("sharedTemplates", {
+      ownerId: identity.tokenIdentifier,
       name: args.name,
       description: args.description,
-      authorName: args.authorName,
+      authorName: identity.name?.trim() || identity.email?.trim() || args.authorName,
       canvas: args.canvas,
       pageCount: counts.pageCount,
       elementCount: counts.elementCount,

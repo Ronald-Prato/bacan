@@ -56,7 +56,6 @@ import {
   Rect,
   RegularPolygon,
   Stage,
-  Star as KonvaStar,
   Text,
   Transformer,
 } from "react-konva"
@@ -123,6 +122,7 @@ import {
 } from "@/editor/document"
 import {
   SHAPE_DRAG_MIME,
+  createStarRenderPoints,
   getShapeRenderDescriptor,
   isShapeType as isCatalogShapeType,
   type PathCommand,
@@ -226,15 +226,30 @@ import {
 } from "@/editor/templates"
 import {
   EXPORT_FORMATS,
+  buildExportArchiveName,
   buildExportFileName,
+  buildExportPageFileName,
   createExportOptions,
+  getExportPageIds,
   getExportMimeType,
   type ExportFormatId,
+  type ExportOptions,
 } from "@/editor/export"
 import { WorkspaceHome } from "@/components/dashboard/workspace-home"
+import {
+  findProjectMissingPreview,
+  getProjectPreviewScale,
+  renderProjectPreview,
+} from "@/components/dashboard/project-preview"
+import { SessionAvatar } from "@/auth/session-avatar"
 import { CanvasContextMenu } from "@/components/editor/canvas-context-menu"
 import { BackgroundLibrary } from "@/components/editor/background-library"
 import { ElementMetadataDialog } from "@/components/editor/element-metadata-dialog"
+import {
+  ExportMenu,
+  ExportProgressToast,
+  type ExportProgress,
+} from "@/components/editor/export-menu"
 import { InlineTextEditor } from "@/components/editor/inline-text-editor"
 import { LayersPanel, type LayerMove } from "@/components/editor/layers-panel"
 import { ShapesPanel } from "@/components/editor/shapes-panel"
@@ -284,7 +299,8 @@ type ProjectPersistence = {
   isEnabled: boolean
   isLoading: boolean
   projects: SavedProject[]
-  saveProject: (projectId: string | null, document: EditorDocument) => Promise<string | null>
+  saveProject: (projectId: string | null, document: EditorDocument, previewUrl?: string) => Promise<string | null>
+  saveProjectPreview: (projectId: string, previewUrl: string) => Promise<void>
   loadProject: (projectId: string) => Promise<EditorDocument | null>
 }
 type ElementMetadataEditor = {
@@ -346,6 +362,7 @@ const MAX_CANVAS_PREVIEW_SIZE = 720
 const MAX_ZOOMED_CANVAS_PREVIEW_SIZE = 1536
 const MIN_CANVAS_PREVIEW_SCALE = 0.05
 const SNAP_THRESHOLD_SCREEN_PX = 8
+const SHAPE_TRANSFORMER_INSET = 2
 const AUTOSAVE_DELAY_MS = 900
 const PAGE_EXIT_FALLBACK_MS = 420
 const localProjectPersistence: ProjectPersistence = {
@@ -353,6 +370,7 @@ const localProjectPersistence: ProjectPersistence = {
   isLoading: false,
   projects: [],
   saveProject: async () => null,
+  saveProjectPreview: async () => undefined,
   loadProject: async () => null,
 }
 
@@ -464,6 +482,39 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("No se pudo leer el archivo"))
     reader.readAsDataURL(file)
   })
+}
+
+function dataUrlToBytes(dataUrl: string): Uint8Array {
+  const encodedData = dataUrl.split(",", 2)[1]
+
+  if (!encodedData) {
+    throw new Error("La página renderizada no contiene datos válidos")
+  }
+
+  const binary = window.atob(encodedData)
+  const bytes = new Uint8Array(binary.length)
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+
+  return bytes
+}
+
+function downloadDataUrl(dataUrl: string, fileName: string) {
+  const link = globalThis.document.createElement("a")
+  link.download = fileName
+  link.href = dataUrl
+  link.click()
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob)
+  const link = globalThis.document.createElement("a")
+  link.download = fileName
+  link.href = objectUrl
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000)
 }
 
 function loadImageSize(src: string): Promise<{ width: number; height: number }> {
@@ -680,13 +731,9 @@ function renderShapeDescriptor({
       )
     case "star":
       return (
-        <KonvaStar
-          x={centerX}
-          y={centerY}
-          numPoints={descriptor.points}
-          innerRadius={radius * descriptor.innerRadiusRatio}
-          outerRadius={radius}
-          rotation={(descriptor.rotation * 180) / Math.PI}
+        <Line
+          points={createStarRenderPoints(descriptor, { width, height })}
+          closed
           {...common}
         />
       )
@@ -744,7 +791,19 @@ function EditableImage({
     return () => {
       node.clearCache()
     }
-  }, [image, filters.brightness, filters.contrast, filters.saturation, filters.blur])
+  }, [
+    image,
+    element.width,
+    element.height,
+    cropConfig.x,
+    cropConfig.y,
+    cropConfig.width,
+    cropConfig.height,
+    filters.brightness,
+    filters.contrast,
+    filters.saturation,
+    filters.blur,
+  ])
 
   return (
     <KonvaGroup
@@ -1009,13 +1068,14 @@ function EditableElement({
             opacity={textElement.opacity}
           />
         ) : null}
-        {isSelected && showSelectionControls && !isTextEditing ? (
+        {isSelected && showSelectionControls && !isTextEditing && (!canTransform || element.locked) ? (
           <Rect
             width={displayElement.width}
             height={displayElement.height}
             listening={false}
             stroke="#9cff6d"
-            strokeWidth={4}
+            strokeScaleEnabled={false}
+            strokeWidth={2}
             dash={canTransform ? undefined : [20, 14]}
           />
         ) : null}
@@ -1024,7 +1084,9 @@ function EditableElement({
         <Transformer
           ref={transformerRef}
           rotateEnabled
+          padding={element.type === "shape" ? -SHAPE_TRANSFORMER_INSET : 0}
           borderStroke="#9cff6d"
+          borderStrokeWidth={2}
           anchorStroke="#9cff6d"
           anchorFill="#ffffff"
           anchorSize={10}
@@ -1054,7 +1116,8 @@ function PanelSearch({
     <label className="flex h-12 items-center gap-3 rounded-md border border-white/10 bg-[#0e1115] px-3 text-[#9aa5a1] focus-within:border-[#9cff6d]/50 focus-within:ring-2 focus-within:ring-[#9cff6d]/15">
       <Search className="size-5 shrink-0 text-[#9cff6d]" />
       <input
-        className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[#f6f7ef] outline-none placeholder:text-[#6f7a75]"
+        type="search"
+        className="editor-search-input min-w-0 flex-1 bg-transparent text-sm font-medium text-[#f6f7ef] outline-none placeholder:text-[#6f7a75]"
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -1127,6 +1190,50 @@ function StaticCanvasElement({ element }: { element: CanvasElement }) {
         />
       ) : null}
     </KonvaGroup>
+  )
+}
+
+function ProjectThumbnailStage({
+  document,
+  onStageReady,
+}: {
+  document: EditorDocument
+  onStageReady: (stage: Konva.Stage | null) => void
+}) {
+  const page = document.pages[0]
+
+  if (!page) {
+    return null
+  }
+
+  const documentSize = document.size ?? CANVAS_SIZE
+  const scale = getProjectPreviewScale(documentSize)
+
+  return (
+    <div
+      aria-hidden="true"
+      style={{ position: "fixed", left: -10_000, top: 0, pointerEvents: "none" }}
+    >
+      <Stage
+        ref={onStageReady}
+        width={Math.max(1, Math.round(documentSize.width * scale))}
+        height={Math.max(1, Math.round(documentSize.height * scale))}
+        scaleX={scale}
+        scaleY={scale}
+      >
+        <KonvaLayer>
+          <CanvasBackground
+            color={page.background}
+            imageSource={page.backgroundImage}
+            width={documentSize.width}
+            height={documentSize.height}
+          />
+          {page.elements.map((element) => (
+            <StaticCanvasElement key={element.id} element={element} />
+          ))}
+        </KonvaLayer>
+      </Stage>
+    </div>
   )
 }
 
@@ -1270,7 +1377,12 @@ function EditorApp({
   const [snapPreview, setSnapPreview] = useState<SnapPreview>(null)
   const [dragSelection, setDragSelection] = useState<DragSelection>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null)
   const [pagePendingDeletion, setPagePendingDeletion] = useState<string | null>(null)
+  const [previewBackfill, setPreviewBackfill] = useState<{
+    projectId: string
+    document: EditorDocument
+  } | null>(null)
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const savedTheme = localStorage.getItem("bacan-editor-theme")
     return savedTheme === "light" ? "light" : "dark"
@@ -1278,6 +1390,10 @@ function EditorApp({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasViewportRef = useRef<HTMLDivElement>(null)
   const stageRefs = useRef<StageMap>({})
+  const projectPreviewStageRef = useRef<Konva.Stage | null>(null)
+  const previewBackfillStageRef = useRef<Konva.Stage | null>(null)
+  const attemptedPreviewBackfillIdsRef = useRef(new Set<string>())
+  const exportToastTimeoutRef = useRef<number | null>(null)
   const altDuplicatedDragRef = useRef<string | null>(null)
   const document = documentHistory.present
   const lastSavedFingerprintRef = useRef(createDocumentFingerprint(document))
@@ -1297,6 +1413,12 @@ function EditorApp({
     window.document.documentElement.classList.toggle("dark", theme === "dark")
     localStorage.setItem("bacan-editor-theme", theme)
   }, [theme])
+
+  useEffect(() => () => {
+    if (exportToastTimeoutRef.current !== null) {
+      window.clearTimeout(exportToastTimeoutRef.current)
+    }
+  }, [])
 
   const refreshComments = useCallback(async () => {
     if (!commentPersistence.isEnabled || !currentProjectId) {
@@ -1383,6 +1505,59 @@ function EditorApp({
   const assets = assetPersistence.isEnabled ? assetPersistence.assets : localAssets
   const recentProjects = useMemo(() => listRecentProjects(persistence.projects, 3), [persistence.projects])
   const documentSize = document.size ?? CANVAS_SIZE
+  const createProjectPreviewUrl = useCallback(
+    () => renderProjectPreview(projectPreviewStageRef.current),
+    [],
+  )
+  const saveProjectPreview = persistence.saveProjectPreview
+
+  useEffect(() => {
+    if (workspaceView !== "home" || persistence.isLoading || previewBackfill) {
+      return
+    }
+
+    const project = findProjectMissingPreview(
+      recentProjects,
+      attemptedPreviewBackfillIdsRef.current,
+    )
+
+    if (!project) {
+      return
+    }
+
+    attemptedPreviewBackfillIdsRef.current.add(project.id)
+    let isCancelled = false
+
+    void persistence.loadProject(project.id).then((projectDocument) => {
+      if (!isCancelled && projectDocument) {
+        setPreviewBackfill({ projectId: project.id, document: projectDocument })
+      }
+    })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [persistence, previewBackfill, recentProjects, workspaceView])
+
+  useEffect(() => {
+    if (workspaceView !== "home" || !previewBackfill) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const previewUrl = renderProjectPreview(previewBackfillStageRef.current)
+
+      if (!previewUrl) {
+        setPreviewBackfill(null)
+        return
+      }
+
+      void saveProjectPreview(previewBackfill.projectId, previewUrl)
+        .finally(() => setPreviewBackfill(null))
+    }, 800)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [previewBackfill, saveProjectPreview, workspaceView])
   const canvasPreviewWidth = Math.round(documentSize.width * canvasPreviewScale)
   const canvasPreviewHeight = Math.round(documentSize.height * canvasPreviewScale)
   const dragSelectionBounds = dragSelection
@@ -1651,7 +1826,11 @@ function EditorApp({
     const timeoutId = window.setTimeout(() => {
       void (async () => {
         try {
-          const savedProjectId = await persistence.saveProject(currentProjectId, document)
+          const savedProjectId = await persistence.saveProject(
+            currentProjectId,
+            document,
+            createProjectPreviewUrl(),
+          )
 
           if (isCancelled) {
             return
@@ -1678,7 +1857,7 @@ function EditorApp({
       isCancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [currentProjectId, document, persistence])
+  }, [createProjectPreviewUrl, currentProjectId, document, persistence])
 
   const saveCurrentProject = useCallback(async () => {
     if (!persistence.isEnabled) {
@@ -1689,7 +1868,11 @@ function EditorApp({
     setAutosaveError("")
 
     try {
-      const savedProjectId = await persistence.saveProject(currentProjectId, document)
+      const savedProjectId = await persistence.saveProject(
+        currentProjectId,
+        document,
+        createProjectPreviewUrl(),
+      )
 
       if (savedProjectId) {
         setCurrentProjectId(savedProjectId)
@@ -1701,7 +1884,7 @@ function EditorApp({
       setAutosaveError(error instanceof Error ? error.message : "No se pudo guardar el proyecto")
       setAutosaveStatus("error")
     }
-  }, [currentProjectId, document, persistence])
+  }, [createProjectPreviewUrl, currentProjectId, document, persistence])
 
   const openProject = useCallback(
     async (projectId: string) => {
@@ -1744,7 +1927,7 @@ function EditorApp({
       let projectId = currentProjectId
 
       if (!projectId) {
-        projectId = await persistence.saveProject(null, document)
+        projectId = await persistence.saveProject(null, document, createProjectPreviewUrl())
 
         if (projectId) {
           setCurrentProjectId(projectId)
@@ -1769,7 +1952,7 @@ function EditorApp({
     } catch (error) {
       setVersionStatus(error instanceof Error ? error.message : "No se pudo guardar la version.")
     }
-  }, [currentProjectId, document, persistence, versionLabel, versionPersistence])
+  }, [createProjectPreviewUrl, currentProjectId, document, persistence, versionLabel, versionPersistence])
 
   const restoreProjectVersion = useCallback(
     async (versionId: string) => {
@@ -1807,7 +1990,7 @@ function EditorApp({
 
     try {
       if (!projectId) {
-        projectId = await persistence.saveProject(null, document)
+        projectId = await persistence.saveProject(null, document, createProjectPreviewUrl())
 
         if (!projectId) {
           throw new Error("Guarda el proyecto antes de compartirlo.")
@@ -2537,48 +2720,130 @@ function EditorApp({
     setDocument((currentDocument) => duplicateElementBehind(currentDocument, pageId, elementId, createId))
   }
 
-  const exportActivePage = async () => {
-    if (!resolvedActivePageId) {
+  const exportDesign = async (options: ExportOptions) => {
+    const pageIds = getExportPageIds(
+      document.pages.map((page) => page.id),
+      resolvedActivePageId ?? null,
+      options.pageSelection,
+    )
+
+    if (pageIds.length === 0 || isExporting) {
       return
     }
 
-    setIsExporting(true)
-    await waitForNextFrame()
+    if (exportToastTimeoutRef.current !== null) {
+      window.clearTimeout(exportToastTimeoutRef.current)
+      exportToastTimeoutRef.current = null
+    }
 
-    let dataUrl: string | undefined
+    setSnapPreview(null)
+    setElementContextMenu(null)
+    setIsExporting(true)
+    setExportProgress({
+      message: "Preparando las páginas y cargando los recursos del diseño en segundo plano.",
+      previewUrl: null,
+      progress: 4,
+      status: "rendering",
+    })
 
     try {
-      dataUrl = stageRefs.current[resolvedActivePageId]?.toDataURL({
-        pixelRatio: 1 / canvasPreviewScale,
-        mimeType: getExportMimeType(exportOptions.format),
-        quality: exportOptions.quality,
-      })
+      await waitForNextFrame()
+
+      const renderedPages: Array<{ dataUrl: string; pageId: string; pageNumber: number }> = []
+
+      for (const [pageIndex, pageId] of pageIds.entries()) {
+        const stage = stageRefs.current[pageId]
+
+        if (!stage) {
+          throw new Error("Una página del diseño no está disponible para renderizar")
+        }
+
+        const dataUrl = stage.toDataURL({
+          pixelRatio: options.scale / canvasPreviewScale,
+          mimeType: getExportMimeType(options.format),
+          quality: options.quality,
+        })
+        const pageNumber = document.pages.findIndex((page) => page.id === pageId) + 1
+        const progress = 10 + ((pageIndex + 1) / pageIds.length) * 65
+
+        renderedPages.push({ dataUrl, pageId, pageNumber })
+        setExportProgress((currentProgress) => ({
+          message: `Renderizando la página ${pageIndex + 1} de ${pageIds.length} a ${options.scale}× en segundo plano.`,
+          previewUrl: currentProgress?.previewUrl ?? dataUrl,
+          progress,
+          status: "rendering",
+        }))
+        await waitForNextFrame()
+      }
+
+      const isMultiPageRaster = options.format !== "pdf" && renderedPages.length > 1
+      setExportProgress((currentProgress) => ({
+        message: options.format === "pdf"
+          ? "Componiendo las páginas renderizadas en un PDF listo para descargar."
+          : isMultiPageRaster
+            ? "Comprimiendo las imágenes renderizadas en un archivo ZIP."
+            : "Codificando la imagen final y preparando la descarga.",
+        previewUrl: currentProgress?.previewUrl ?? renderedPages[0]?.dataUrl ?? null,
+        progress: 84,
+        status: "packaging",
+      }))
+      await waitForNextFrame()
+
+      if (options.format === "pdf") {
+        const { jsPDF } = await import("jspdf")
+        const orientation = documentSize.width >= documentSize.height ? "landscape" : "portrait"
+        const pdf = new jsPDF({
+          orientation,
+          unit: "px",
+          format: [documentSize.width, documentSize.height],
+          compress: true,
+        })
+
+        renderedPages.forEach((renderedPage, pageIndex) => {
+          if (pageIndex > 0) {
+            pdf.addPage([documentSize.width, documentSize.height], orientation)
+          }
+
+          pdf.addImage(renderedPage.dataUrl, "PNG", 0, 0, documentSize.width, documentSize.height)
+        })
+        pdf.save(buildExportFileName(document.name, "pdf"))
+      } else if (isMultiPageRaster) {
+        const { zipSync } = await import("fflate")
+        const files = Object.fromEntries(
+          renderedPages.map((renderedPage) => [
+            buildExportPageFileName(document.name, renderedPage.pageNumber, options.format as "png" | "jpg"),
+            dataUrlToBytes(renderedPage.dataUrl),
+          ]),
+        )
+        const archive = zipSync(files, { level: 6 })
+        downloadBlob(new Blob([archive], { type: "application/zip" }), buildExportArchiveName(document.name))
+      } else {
+        downloadDataUrl(
+          renderedPages[0].dataUrl,
+          buildExportFileName(document.name, options.format),
+        )
+      }
+
+      setExportProgress((currentProgress) => ({
+        message: `${renderedPages.length === 1 ? "La descarga comenzó automáticamente" : `Se exportaron ${renderedPages.length} páginas y la descarga comenzó automáticamente`}.`,
+        previewUrl: currentProgress?.previewUrl ?? renderedPages[0]?.dataUrl ?? null,
+        progress: 100,
+        status: "complete",
+      }))
+      exportToastTimeoutRef.current = window.setTimeout(() => {
+        setExportProgress(null)
+        exportToastTimeoutRef.current = null
+      }, 6_000)
+    } catch (error) {
+      setExportProgress((currentProgress) => ({
+        message: error instanceof Error ? error.message : "Ocurrió un error inesperado durante el renderizado.",
+        previewUrl: currentProgress?.previewUrl ?? null,
+        progress: 100,
+        status: "error",
+      }))
     } finally {
       setIsExporting(false)
     }
-
-    if (!dataUrl) {
-      return
-    }
-
-    if (exportOptions.format === "pdf") {
-      const { jsPDF } = await import("jspdf")
-      const pdf = new jsPDF({
-        orientation: documentSize.width >= documentSize.height ? "landscape" : "portrait",
-        unit: "px",
-        format: [documentSize.width, documentSize.height],
-        compress: true,
-      })
-
-      pdf.addImage(dataUrl, "PNG", 0, 0, documentSize.width, documentSize.height)
-      pdf.save(buildExportFileName(document.name, "pdf"))
-      return
-    }
-
-    const link = globalThis.document.createElement("a")
-    link.download = buildExportFileName(document.name, exportOptions.format)
-    link.href = dataUrl
-    link.click()
   }
 
   useEffect(() => {
@@ -2774,7 +3039,12 @@ function EditorApp({
         disabled: !hasSelection,
       },
       { icon: Trash2, label: "Eliminar", onClick: removeSelected, disabled: !hasSelection },
-      { icon: Download, label: "Exportar", onClick: exportActivePage, disabled: !activePage },
+      {
+        icon: Download,
+        label: "Exportar",
+        onClick: () => void exportDesign(exportOptions),
+        disabled: !activePage || isExporting,
+      },
     ]
     const filteredToolActions = filterSearchItems(toolActions, panelSearchQuery, ["label"])
 
@@ -3348,20 +3618,45 @@ function EditorApp({
     )
   }
 
+  const projectThumbnailStage = (
+    <ProjectThumbnailStage
+      document={document}
+      onStageReady={(stage) => {
+        projectPreviewStageRef.current = stage
+      }}
+    />
+  )
+  const projectPreviewBackfillStage = previewBackfill ? (
+    <ProjectThumbnailStage
+      document={previewBackfill.document}
+      onStageReady={(stage) => {
+        previewBackfillStageRef.current = stage
+      }}
+    />
+  ) : null
+
   if (workspaceView === "home") {
     return (
-      <WorkspaceHome
-        isLoading={persistence.isLoading}
-        recentProjects={recentProjects}
-        onCreateFormat={createBlankFormat}
-        onCreateCustom={createBlankCustomSize}
-        onOpenProject={(projectId) => void openProject(projectId)}
-      />
+      <>
+        {projectThumbnailStage}
+        {projectPreviewBackfillStage}
+        <WorkspaceHome
+          accountMenu={<SessionAvatar />}
+          isLoading={persistence.isLoading}
+          recentProjects={recentProjects}
+          theme={theme}
+          onThemeChange={setTheme}
+          onCreateFormat={createBlankFormat}
+          onCreateCustom={createBlankCustomSize}
+          onOpenProject={(projectId) => void openProject(projectId)}
+        />
+      </>
     )
   }
 
   return (
-    <main className={`min-h-screen bg-[#0d1012] text-[#f6f7ef] ${theme === "light" ? "editor-theme-light" : "editor-theme-dark"}`}>
+    <main className={`editor-app-shell bg-[#0d1012] text-[#f6f7ef] ${theme === "light" ? "editor-theme-light" : "editor-theme-dark"}`}>
+      {projectThumbnailStage}
       <input
         ref={fileInputRef}
         type="file"
@@ -3371,19 +3666,36 @@ function EditorApp({
         onChange={handleUpload}
       />
       <EditorTopBar
+        accountMenu={<SessionAvatar />}
         autosaveLabel={autosaveLabel}
         canSave={persistence.isEnabled && autosaveStatus !== "saving"}
         documentName={document.name}
+        exportControl={(
+          <ExportMenu
+            activePageNumber={Math.max(document.pages.findIndex((page) => page.id === resolvedActivePageId) + 1, 1)}
+            documentSize={documentSize}
+            isExporting={isExporting}
+            onExport={(options) => void exportDesign(options)}
+            onOptionsChange={setExportOptions}
+            options={exportOptions}
+            pageCount={document.pages.length}
+            theme={theme}
+          />
+        )}
         onComments={() => setActiveTool("comments")}
         onDocumentNameChange={setDocumentName}
-        onHome={() => setWorkspaceView("home")}
+        onHome={() => {
+          void saveCurrentProject()
+          setWorkspaceView("home")
+        }}
         onResize={() => setActiveTool("templates")}
         onSave={saveCurrentProject}
         onThemeChange={setTheme}
         theme={theme}
       />
+      <ExportProgressToast exportProgress={exportProgress} onClose={() => setExportProgress(null)} />
 
-      <div className={`grid h-[calc(100vh-4rem)] min-h-0 overflow-hidden grid-cols-[96px_minmax(0,1fr)] ${activeTool === "elements" ? "lg:grid-cols-[96px_360px_minmax(0,1fr)] xl:grid-cols-[96px_360px_minmax(0,1fr)_320px]" : "lg:grid-cols-[96px_320px_minmax(0,1fr)] xl:grid-cols-[96px_320px_minmax(0,1fr)_320px]"}`}>
+      <div className={`editor-app-layout grid grid-cols-[96px_minmax(0,1fr)] ${activeTool === "elements" ? "lg:grid-cols-[96px_360px_minmax(0,1fr)] xl:grid-cols-[96px_360px_minmax(0,1fr)_320px]" : "lg:grid-cols-[96px_320px_minmax(0,1fr)] xl:grid-cols-[96px_320px_minmax(0,1fr)_320px]"}`}>
         <EditorToolRail activeTool={activeTool} tools={sidebarTools} onSelectTool={setActiveTool} />
 
         <EditorContextSidebar
@@ -4482,6 +4794,7 @@ function ConvexBackedApp() {
     | undefined
   const createProject = useMutation(api.projects.create)
   const updateProject = useMutation(api.projects.updateCanvas)
+  const updateProjectPreview = useMutation(api.projects.updatePreview)
   const generateAssetUploadUrl = useMutation(api.assets.generateUploadUrl)
   const saveAsset = useMutation(api.assets.save)
   const createComment = useMutation(api.comments.create)
@@ -4536,8 +4849,8 @@ function ConvexBackedApp() {
   )
 
   const saveProject = useCallback(
-    async (projectId: string | null, document: EditorDocument) => {
-      const payload = createProjectSavePayload(document)
+    async (projectId: string | null, document: EditorDocument, previewUrl?: string) => {
+      const payload = createProjectSavePayload(document, previewUrl)
 
       if (projectId) {
         await updateProject({
@@ -4564,15 +4877,26 @@ function ConvexBackedApp() {
     [convex],
   )
 
+  const saveProjectPreview = useCallback(
+    async (projectId: string, previewUrl: string) => {
+      await updateProjectPreview({
+        id: projectId as Id<"projects">,
+        previewUrl,
+      })
+    },
+    [updateProjectPreview],
+  )
+
   const persistence = useMemo<ProjectPersistence>(
     () => ({
       isEnabled: true,
       isLoading: projectRecords === undefined,
       projects,
       saveProject,
+      saveProjectPreview,
       loadProject,
     }),
-    [loadProject, projectRecords, projects, saveProject],
+    [loadProject, projectRecords, projects, saveProject, saveProjectPreview],
   )
 
   const versionPersistence = useMemo<ProjectVersionPersistence>(

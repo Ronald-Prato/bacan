@@ -4,6 +4,7 @@ import {
   SHAPE_CATEGORIES,
   SHAPE_DRAG_MIME,
   SHAPE_OPTIONS,
+  createStarRenderPoints,
   getShapeDefaultSize,
   getShapeRenderDescriptor,
   isShapeCatalogItem,
@@ -109,6 +110,21 @@ describe("shape catalog", () => {
 })
 
 describe("shape presets and render descriptors", () => {
+  it("builds star vertices from the visible geometry instead of a phantom diameter box", () => {
+    const points = createStarRenderPoints(
+      { kind: "star", points: 5, innerRadiusRatio: 0.42, rotation: 0 },
+      { width: 200, height: 200 },
+    )
+    const xs = points.filter((_, index) => index % 2 === 0)
+    const ys = points.filter((_, index) => index % 2 === 1)
+
+    expect(points).toHaveLength(20)
+    expect(points.slice(0, 2)).toEqual([100, 0])
+    expect(Math.min(...xs)).toBeCloseTo(4.894, 3)
+    expect(Math.max(...xs)).toBeCloseTo(195.106, 3)
+    expect(Math.max(...ys)).toBeCloseTo(180.902, 3)
+  })
+
   it("defines dimensions and aspect policy for every catalog item", () => {
     for (const item of SHAPE_OPTIONS) {
       expect(item.size.width).toBeGreaterThan(0)

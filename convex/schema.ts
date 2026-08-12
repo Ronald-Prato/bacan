@@ -3,11 +3,15 @@ import { v } from "convex/values"
 
 export default defineSchema({
   projects: defineTable({
+    // Optional only while legacy documents without an authenticated owner remain.
+    ownerId: v.optional(v.string()),
     name: v.string(),
     canvas: v.any(),
+    previewUrl: v.optional(v.string()),
     updatedAt: v.number(),
-  }),
+  }).index("by_ownerId_and_updatedAt", ["ownerId", "updatedAt"]),
   projectVersions: defineTable({
+    ownerId: v.string(),
     projectId: v.id("projects"),
     label: v.string(),
     canvas: v.any(),
@@ -16,6 +20,7 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_projectId_and_createdAt", ["projectId", "createdAt"]),
   projectShares: defineTable({
+    ownerId: v.string(),
     projectId: v.id("projects"),
     access: v.union(v.literal("view"), v.literal("comment"), v.literal("edit")),
     token: v.string(),
@@ -25,6 +30,8 @@ export default defineSchema({
     .index("by_projectId_and_createdAt", ["projectId", "createdAt"])
     .index("by_token", ["token"]),
   projectPresence: defineTable({
+    // Optional only while legacy presence rows from unowned projects remain.
+    ownerId: v.optional(v.string()),
     projectId: v.id("projects"),
     clientId: v.string(),
     displayName: v.string(),
@@ -36,13 +43,17 @@ export default defineSchema({
     .index("by_projectId_and_updatedAt", ["projectId", "updatedAt"])
     .index("by_projectId_and_clientId", ["projectId", "clientId"]),
   assets: defineTable({
+    ownerId: v.string(),
     name: v.string(),
     storageId: v.id("_storage"),
     contentType: v.optional(v.string()),
     size: v.optional(v.number()),
     updatedAt: v.number(),
-  }).index("by_updatedAt", ["updatedAt"]),
+  })
+    .index("by_updatedAt", ["updatedAt"])
+    .index("by_ownerId_and_updatedAt", ["ownerId", "updatedAt"]),
   comments: defineTable({
+    ownerId: v.string(),
     projectId: v.id("projects"),
     body: v.string(),
     authorName: v.string(),
@@ -51,6 +62,7 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_projectId_and_createdAt", ["projectId", "createdAt"]),
   sharedTemplates: defineTable({
+    ownerId: v.string(),
     name: v.string(),
     description: v.string(),
     authorName: v.string(),

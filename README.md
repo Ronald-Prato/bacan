@@ -9,6 +9,7 @@ bacan es un editor open source inspirado en Canva. El primer objetivo es tener u
 - Tailwind CSS v4
 - shadcn/ui
 - Convex
+- Clerk con Google y GitHub
 - React Konva / Konva para el motor de canvas
 
 ## Funcionalidades basicas tipo Canva
@@ -46,14 +47,32 @@ bun install
 bun run dev
 ```
 
-Para conectar Convex:
+### Autenticación y Convex
+
+El acceso a todas las páginas requiere una sesión de Clerk. Los proyectos,
+assets, comentarios, versiones, enlaces y presencia se autorizan en Convex con
+el propietario derivado del token; el frontend nunca envía un `userId` para
+decidir permisos.
+
+Para enlazar otra instalación con sus propias apps de Clerk y Convex:
 
 ```bash
 cp .env.example .env.local
+clerk auth login
+clerk link --app app_xxx
+clerk env pull
 bunx convex dev
 ```
 
-Luego copia la URL de Convex en `VITE_CONVEX_URL`.
+Configura `VITE_CONVEX_URL` y `VITE_CLERK_PUBLISHABLE_KEY` en `.env.local`.
+En Clerk activa Google, GitHub y la plantilla JWT `convex`. En el deployment de
+Convex configura el issuer de la instancia Clerk:
+
+```bash
+bunx convex env set CLERK_JWT_ISSUER_DOMAIN https://your-instance.clerk.accounts.dev
+```
+
+`CLERK_SECRET_KEY` no debe usarse en código cliente ni subirse al repositorio.
 
 ## Scripts
 

@@ -8,6 +8,7 @@ export type SavedProject = {
   updatedAt: number
   pageCount: number
   elementCount: number
+  previewUrl?: string
 }
 
 export type ProjectRecord = {
@@ -17,6 +18,7 @@ export type ProjectRecord = {
   updatedAt: number
   pageCount?: number
   elementCount?: number
+  previewUrl?: unknown
 }
 export type ProjectVersionDraft = {
   projectId: string
@@ -44,13 +46,15 @@ export type SavedProjectVersion = {
   elementCount: number
 }
 
-export function createProjectSavePayload(document: EditorDocument): {
+export function createProjectSavePayload(document: EditorDocument, previewUrl?: string): {
   name: string
   canvas: EditorDocument
+  previewUrl?: string
 } {
   return {
     name: normalizeProjectName(document.name),
     canvas: document,
+    ...(previewUrl ? { previewUrl } : {}),
   }
 }
 
@@ -63,6 +67,9 @@ export function summarizeProjectRecord(record: ProjectRecord): SavedProject {
     updatedAt: record.updatedAt,
     pageCount: record.pageCount ?? document?.pages.length ?? 0,
     elementCount: record.elementCount ?? document?.pages.reduce((count, page) => count + page.elements.length, 0) ?? 0,
+    ...(typeof record.previewUrl === "string" && record.previewUrl.length > 0
+      ? { previewUrl: record.previewUrl }
+      : {}),
   }
 }
 

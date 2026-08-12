@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 
 import { mutation, query } from "./_generated/server"
+import { requireOwnedProject } from "./auth"
 
 const ACTIVE_TTL_MS = 45_000
 
@@ -9,6 +10,7 @@ export const list = query({
     projectId: v.id("projects"),
   },
   handler: async (ctx, args) => {
+    await requireOwnedProject(ctx, args.projectId)
     const activeSince = Date.now() - ACTIVE_TTL_MS
     const records = await ctx.db
       .query("projectPresence")
@@ -30,6 +32,7 @@ export const heartbeat = mutation({
     selectedElementName: v.union(v.string(), v.null()),
   },
   handler: async (ctx, args) => {
+    const { ownerId } = await requireOwnedProject(ctx, args.projectId)
     const displayName = args.displayName.trim() || "Colaborador"
     const now = Date.now()
     const existingPresence = await ctx.db
@@ -51,6 +54,7 @@ export const heartbeat = mutation({
     }
 
     return await ctx.db.insert("projectPresence", {
+      ownerId,
       projectId: args.projectId,
       clientId: args.clientId,
       displayName,
@@ -68,6 +72,7 @@ export const leave = mutation({
     clientId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireOwnedProject(ctx, args.projectId)
     const existingPresence = await ctx.db
       .query("projectPresence")
       .withIndex("by_projectId_and_clientId", (q) =>

@@ -53,6 +53,25 @@ describe("project persistence helpers", () => {
     })
   })
 
+  it("keeps a lightweight rendered preview in project save payloads and summaries", () => {
+    const document = createInitialDocument(idSequence())
+    const previewUrl = "data:image/jpeg;base64,project-preview"
+
+    expect(createProjectSavePayload(document, previewUrl)).toMatchObject({
+      previewUrl,
+    })
+    expect(summarizeProjectRecord({
+      _id: "project-with-preview",
+      name: "Launch",
+      canvas: document,
+      updatedAt: 1710000000000,
+      previewUrl,
+    })).toMatchObject({
+      id: "project-with-preview",
+      previewUrl,
+    })
+  })
+
   it("rejects invalid loaded canvases before they replace the editor state", () => {
     expect(isEditorDocument(createInitialDocument(idSequence()))).toBe(true)
     expect(isEditorDocument({ name: "Broken", pages: [{ id: "p1" }] })).toBe(false)

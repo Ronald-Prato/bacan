@@ -160,6 +160,23 @@ export type ShapeCatalogItem = {
   render: ShapeRenderDescriptor
 }
 
+export function createStarRenderPoints(
+  descriptor: StarRenderDescriptor,
+  size: ShapeSize,
+): number[] {
+  const pointCount = Math.max(2, descriptor.points)
+  const centerX = size.width / 2
+  const centerY = size.height / 2
+  const outerRadius = Math.min(size.width, size.height) / 2
+
+  return Array.from({ length: pointCount * 2 }, (_, index) => {
+    const radius = index % 2 === 0 ? outerRadius : outerRadius * descriptor.innerRadiusRatio
+    const angle = -Math.PI / 2 + descriptor.rotation + (index * Math.PI) / pointCount
+
+    return [centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius]
+  }).flat()
+}
+
 export type ShapeCategory = {
   id: ShapeCategoryId
   label: string

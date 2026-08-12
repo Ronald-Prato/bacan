@@ -1,12 +1,11 @@
 import { StrictMode } from 'react'
-import { ConvexProvider, ConvexReactClient } from 'convex/react'
 import { createRoot } from 'react-dom/client'
 import './fonts'
 import './index.css'
 import App from './App.tsx'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { AuthProviders } from '@/auth/auth'
 
-const convexUrl = import.meta.env.VITE_CONVEX_URL
 const app = (
   <TooltipProvider>
     <App />
@@ -15,6 +14,6 @@ const app = (
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {convexUrl ? <ConvexProvider client={new ConvexReactClient(convexUrl)}>{app}</ConvexProvider> : app}
+    <AuthProviders>{app}</AuthProviders>
   </StrictMode>,
 )
