@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ChangeEvent } from "react"
+import { useEffect, useRef, type ChangeEvent, type KeyboardEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 
@@ -22,22 +22,44 @@ export function ElementMetadataDialog({
   value: string
 }) {
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
+  const dialogRef = useRef<HTMLFormElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null
     fieldRef.current?.focus()
     fieldRef.current?.select()
+
+    return () => previousFocusRef.current?.focus()
   }, [])
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onCancel()
-      }
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
+    event.stopPropagation()
+
+    if (event.key === "Escape") {
+      event.preventDefault()
+      onCancel()
+      return
     }
 
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [onCancel])
+    if (event.key !== "Tab") {
+      return
+    }
+
+    const focusable = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>('input, textarea, button:not(:disabled)') ?? [],
+    )
+    const first = focusable[0]
+    const last = focusable.at(-1)
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last?.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first?.focus()
+    }
+  }
 
   const sharedProps = {
     ref: (node: HTMLInputElement | HTMLTextAreaElement | null) => {
@@ -46,7 +68,7 @@ export function ElementMetadataDialog({
     value,
     onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(event.target.value),
     "aria-label": label,
-    className: "editor-element-metadata-field min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25",
+    className: "editor-element-metadata-field min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px]",
   }
 
   return (
@@ -60,11 +82,13 @@ export function ElementMetadataDialog({
       }}
     >
       <form
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="element-metadata-title"
         aria-describedby="element-metadata-description"
         className="editor-element-metadata-dialog w-full max-w-md rounded-md border border-border bg-popover p-5 text-popover-foreground"
+        onKeyDown={handleDialogKeyDown}
         onSubmit={(event) => {
           event.preventDefault()
           onSave()

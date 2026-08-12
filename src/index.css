@@ -443,6 +443,13 @@
   padding-left: 0.25rem;
 }
 
+.editor-canvas-context-menu__submenu-container[data-side="left"] {
+  right: 100%;
+  left: auto;
+  padding-right: 0.25rem;
+  padding-left: 0;
+}
+
 .editor-canvas-context-menu__item {
   display: flex;
   min-height: 2.25rem;

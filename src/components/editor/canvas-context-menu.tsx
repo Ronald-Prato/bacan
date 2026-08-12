@@ -117,7 +117,12 @@ function MenuItem({
   setItemRef: (itemIndex: number, element: HTMLButtonElement | null) => void
 }) {
   const [focusRequest, setFocusRequest] = useState(0)
+  const [submenuPosition, setSubmenuPosition] = useState<{ side: "left" | "right"; offsetY: number }>({
+    side: "right",
+    offsetY: 0,
+  })
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const submenuContainerRef = useRef<HTMLDivElement>(null)
   const submenuId = useId()
   const submenuEntries = item.submenu ?? []
   const hasSubmenu = submenuEntries.length > 0
@@ -139,6 +144,29 @@ function MenuItem({
     onCloseSubmenu(itemIndex)
     triggerRef.current?.focus()
   }
+
+  useLayoutEffect(() => {
+    const container = submenuContainerRef.current
+    const trigger = triggerRef.current
+
+    if (!isSubmenuOpen || !container || !trigger) {
+      return
+    }
+
+    const padding = 8
+    const bounds = container.getBoundingClientRect()
+    const triggerBounds = trigger.getBoundingClientRect()
+    const side = triggerBounds.right + bounds.width > window.innerWidth - padding && triggerBounds.left >= bounds.width
+      ? "left"
+      : "right"
+    const offsetY = bounds.bottom > window.innerHeight - padding
+      ? window.innerHeight - padding - bounds.bottom
+      : bounds.top < padding
+        ? padding - bounds.top
+        : 0
+
+    setSubmenuPosition({ side, offsetY })
+  }, [isSubmenuOpen])
 
   return (
     <div
@@ -209,7 +237,12 @@ function MenuItem({
       </button>
 
       {hasSubmenu && isSubmenuOpen ? (
-        <div className="editor-canvas-context-menu__submenu-container">
+        <div
+          ref={submenuContainerRef}
+          className="editor-canvas-context-menu__submenu-container"
+          data-side={submenuPosition.side}
+          style={{ marginTop: submenuPosition.offsetY }}
+        >
           <CanvasContextMenuSurface
             entries={submenuEntries}
             menuId={submenuId}
@@ -314,6 +347,13 @@ function CanvasContextMenuSurface({
         setActiveIndex(lastEnabledIndex)
         itemRefs.current[lastEnabledIndex]?.focus()
       }
+
+      return
+    }
+
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault()
+      event.stopPropagation()
     }
   }
 
