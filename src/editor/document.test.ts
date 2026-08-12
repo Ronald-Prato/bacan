@@ -15,12 +15,14 @@ import {
   createTextElement,
   deleteElements,
   deleteElement,
+  deletePage,
   distributePageElements,
   duplicateElements,
   duplicateElement,
   duplicateElementBehind,
   findElement,
   findSelectedElements,
+  getElementLayerPosition,
   getSelectionElementIds,
   groupElements,
   moveElementsByDelta,
@@ -80,6 +82,25 @@ describe("editor document model", () => {
 
     expect(document.pages).toHaveLength(2)
     expect(document.pages[1].name).toBe("Pagina 2")
+  })
+
+  it("deletes a page and renumbers the remaining pages", () => {
+    const nextId = idSequence()
+    const twoPages = addPage(createInitialDocument(nextId), nextId)
+    const document = addPage(twoPages, nextId)
+
+    const result = deletePage(document, document.pages[1].id)
+
+    expect(result.pages.map((page) => ({ id: page.id, name: page.name }))).toEqual([
+      { id: "id-1", name: "Pagina 1" },
+      { id: "id-3", name: "Pagina 2" },
+    ])
+  })
+
+  it("keeps at least one page in the document", () => {
+    const document = createInitialDocument(() => "page-1")
+
+    expect(deletePage(document, "page-1")).toBe(document)
   })
 
   it("scales uploaded images to fit the canvas", () => {
@@ -387,6 +408,33 @@ describe("editor document model", () => {
     ])
   })
 
+  it("reports an element position in the layer stack", () => {
+    const nextId = idSequence()
+    const document = createInitialDocument(nextId)
+    const pageId = document.pages[0].id
+    const back = createShapeElement("rect", nextId)
+    const front = createTextElement(nextId)
+    const withElements = [back, front].reduce(
+      (currentDocument, element) => addElementToPage(currentDocument, pageId, element),
+      document,
+    )
+
+    expect(getElementLayerPosition(withElements, pageId, back.id)).toEqual({
+      index: 0,
+      count: 2,
+      isBack: true,
+      isFront: false,
+    })
+    expect(getElementLayerPosition(withElements, pageId, front.id)).toEqual({
+      index: 1,
+      count: 2,
+      isBack: false,
+      isFront: true,
+    })
+    expect(getElementLayerPosition(withElements, pageId, "missing")).toBeNull()
+    expect(getElementLayerPosition(withElements, "missing", back.id)).toBeNull()
+  })
+
   it("toggles element locking without changing its layer position", () => {
     const nextId = idSequence()
     const document = createInitialDocument(nextId)
@@ -494,6 +542,7 @@ describe("editor document model", () => {
     const text = createTextElement(() => "text-1")
 
     expect(text).toMatchObject({
+      text: "Text",
       align: "center",
       fontWeight: "normal",
       fontStyle: "normal",

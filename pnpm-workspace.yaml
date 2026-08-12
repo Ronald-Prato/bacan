@@ -1,5 +1,0 @@
-allowBuilds:
-  core-js: false
-  esbuild: true
-minimumReleaseAgeExclude:
-  - lucide-react@1.22.0

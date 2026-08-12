@@ -147,17 +147,254 @@
   }
 }
 
+.editor-theme-light {
+  --vacan-accent: #93B259;
+  --vacan-background: #FDF6E3;
+  --vacan-foreground: #5C6A72;
+  --background: var(--vacan-background);
+  --foreground: var(--vacan-foreground);
+  --card: var(--vacan-background);
+  --card-foreground: var(--vacan-foreground);
+  --popover: var(--vacan-background);
+  --popover-foreground: var(--vacan-foreground);
+  --primary: var(--vacan-accent);
+  --primary-foreground: color-mix(in srgb, var(--vacan-foreground) 88%, black);
+  --secondary: color-mix(in srgb, var(--vacan-foreground) 8%, var(--vacan-background));
+  --secondary-foreground: var(--vacan-foreground);
+  --muted: color-mix(in srgb, var(--vacan-foreground) 8%, var(--vacan-background));
+  --muted-foreground: color-mix(in srgb, var(--vacan-foreground) 78%, var(--vacan-background));
+  --accent: color-mix(in srgb, var(--vacan-accent) 22%, var(--vacan-background));
+  --accent-foreground: var(--vacan-foreground);
+  --border: color-mix(in srgb, var(--vacan-foreground) 24%, var(--vacan-background));
+  --input: color-mix(in srgb, var(--vacan-foreground) 28%, var(--vacan-background));
+  --ring: var(--vacan-accent);
+  color: var(--vacan-foreground) !important;
+  background: var(--vacan-background) !important;
+}
+
+.editor-theme-light .editor-topbar,
+.editor-theme-light .editor-workspace-toolbar,
+.editor-theme-light .editor-workspace-footer {
+  color: var(--vacan-foreground) !important;
+  background: var(--vacan-background) !important;
+  border-color: color-mix(in srgb, var(--vacan-foreground) 22%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-toolrail,
+.editor-theme-light .editor-context-sidebar,
+.editor-theme-light .editor-inspector {
+  color: var(--vacan-foreground) !important;
+  background: var(--vacan-background) !important;
+  border-color: color-mix(in srgb, var(--vacan-foreground) 22%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-workspace,
+.editor-theme-light .editor-canvas-viewport {
+  background: color-mix(in srgb, var(--vacan-foreground) 10%, var(--vacan-background)) !important;
+  background-image: none !important;
+}
+
+.editor-theme-light .editor-topbar input,
+.editor-theme-light .editor-context-sidebar input,
+.editor-theme-light .editor-inspector input,
+.editor-theme-light .editor-inspector select {
+  color: var(--vacan-foreground) !important;
+  background: color-mix(in srgb, white 42%, var(--vacan-background)) !important;
+  border-color: color-mix(in srgb, var(--vacan-foreground) 28%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-context-sidebar :is(h2, h3, label),
+.editor-theme-light .editor-inspector :is(h2, h3, label) {
+  color: var(--vacan-foreground) !important;
+}
+
+.editor-font-list {
+  scrollbar-color: color-mix(in srgb, currentColor 35%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.editor-font-list::-webkit-scrollbar-track,
+.editor-font-list::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.editor-font-list::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.editor-color-picker {
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  padding: 0;
+}
+
+.editor-color-picker::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+
+.editor-color-picker::-webkit-color-swatch,
+.editor-color-picker::-moz-color-swatch {
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+
+.editor-palette-colors {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 220ms ease, opacity 180ms ease;
+}
+
+.editor-palette-colors[data-expanded="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.editor-theme-light .editor-custom-background-color,
+.editor-theme-light .editor-background-palette {
+  color: var(--vacan-foreground) !important;
+  background: color-mix(in srgb, var(--vacan-foreground) 7%, var(--vacan-background)) !important;
+  border-color: color-mix(in srgb, var(--vacan-foreground) 22%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light :is(
+  .bg-\[\#0e1115\],
+  .bg-\[\#101417\],
+  .bg-\[\#121619\],
+  .bg-\[\#151c18\],
+  .bg-\[\#171b1f\],
+  .bg-\[\#17231d\],
+  .bg-\[\#181c20\]
+) {
+  color: var(--vacan-foreground) !important;
+  background: color-mix(in srgb, var(--vacan-foreground) 7%, var(--vacan-background)) !important;
+  border-color: color-mix(in srgb, var(--vacan-foreground) 22%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light [class*="border-white"] {
+  border-color: color-mix(in srgb, var(--vacan-foreground) 22%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light [class*="text-slate"],
+.editor-theme-light [class*="text-[#cfd7d2]"],
+.editor-theme-light [class*="text-[#f6f7ef]"],
+.editor-theme-light [class*="text-[#8e9995]"],
+.editor-theme-light [class*="text-[#9aa5a1]"] {
+  color: var(--vacan-foreground) !important;
+}
+
+.editor-theme-light [class*="bg-[#9cff6d]"] {
+  color: color-mix(in srgb, var(--vacan-foreground) 88%, black) !important;
+  background: var(--vacan-accent) !important;
+}
+
+.editor-theme-light [class*="hover:bg-[#8de85f]"]:hover {
+  color: color-mix(in srgb, var(--vacan-foreground) 88%, black) !important;
+  background: color-mix(in srgb, var(--vacan-accent) 86%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light [class*="border-[#9cff6d]"] {
+  border-color: var(--vacan-accent) !important;
+}
+
+.editor-theme-light [class*="text-[#9cff6d]"],
+.editor-theme-light [class*="text-[#dfffcf]"],
+.editor-theme-light [class*="text-[#d8ffba]"] {
+  color: color-mix(in srgb, var(--vacan-accent) 76%, var(--vacan-foreground)) !important;
+}
+
+.editor-theme-light [class*="bg-[#9cff6d]/"] {
+  background: color-mix(in srgb, var(--vacan-accent) 18%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-toolrail button {
+  color: color-mix(in srgb, var(--vacan-foreground) 82%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-toolrail button[data-active="true"] {
+  color: var(--vacan-foreground) !important;
+  background: color-mix(in srgb, var(--vacan-accent) 18%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-toolrail button[data-active="true"] span:first-child,
+.editor-theme-light .editor-context-sidebar > div:first-child p {
+  color: var(--vacan-accent) !important;
+}
+
+.editor-theme-light .editor-theme-switcher {
+  background: color-mix(in srgb, var(--vacan-foreground) 7%, var(--vacan-background)) !important;
+  border-color: color-mix(in srgb, var(--vacan-foreground) 22%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-theme-switcher button[aria-pressed="true"] {
+  color: var(--vacan-foreground) !important;
+  background: color-mix(in srgb, var(--vacan-accent) 32%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-add-page {
+  color: var(--vacan-background) !important;
+  background: var(--vacan-foreground) !important;
+  border-color: var(--vacan-foreground) !important;
+}
+
+.editor-theme-light :is(button, input, textarea, select):focus-visible {
+  border-color: var(--vacan-accent) !important;
+  outline-color: var(--vacan-accent) !important;
+}
+
 @keyframes bacan-page-enter {
   0% {
+    grid-template-rows: 0fr;
     opacity: 0;
     transform: translateY(18px) scale(0.985);
   }
   100% {
+    grid-template-rows: 1fr;
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
 
+@keyframes bacan-page-exit {
+  0% {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-14px) scale(0.985);
+  }
+}
+
+.bacan-page-transition {
+  display: grid;
+  grid-template-rows: 1fr;
+  transform-origin: center top;
+}
+
+.bacan-page-transition-content {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .bacan-page-enter {
-  animation: bacan-page-enter 360ms cubic-bezier(0.2, 0.85, 0.2, 1);
+  animation: bacan-page-enter 360ms cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+.bacan-page-exit {
+  pointer-events: none;
+  animation: bacan-page-exit 280ms cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-palette-colors,
+  .editor-background-palette svg,
+  .bacan-page-enter,
+  .bacan-page-exit {
+    animation-duration: 1ms;
+    animation-timing-function: linear;
+    transition-duration: 1ms;
+  }
 }

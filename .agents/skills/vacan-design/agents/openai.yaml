@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vacan Design"
+  short_description: "Enforce Bacan UI palette and design rules"
+  default_prompt: "Use $vacan-design to implement this Bacan interface consistently."

@@ -5,6 +5,7 @@ bacan es un editor open source inspirado en Canva. El primer objetivo es tener u
 ## Stack
 
 - Vite + React + TypeScript
+- Bun
 - Tailwind CSS v4
 - shadcn/ui
 - Convex
@@ -41,15 +42,15 @@ El MVP inicial incluye:
 ## Desarrollo
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Para conectar Convex:
 
 ```bash
 cp .env.example .env.local
-npx convex dev
+bunx convex dev
 ```
 
 Luego copia la URL de Convex en `VITE_CONVEX_URL`.
@@ -57,10 +58,11 @@ Luego copia la URL de Convex en `VITE_CONVEX_URL`.
 ## Scripts
 
 ```bash
-npm run dev
-npm run build
-npm run lint
-npm run convex:dev
+bun run dev
+bun run build
+bun run lint
+bun run test
+bun run convex:dev
 ```
 
 No hay despliegue configurado todavia.

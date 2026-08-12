@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react"
 import { useConvex, useMutation, useQuery } from "convex/react"
 import Konva from "konva"
 import {
-  AppWindow,
   AlignCenter,
   AlignHorizontalJustifyCenter,
   AlignHorizontalJustifyEnd,
@@ -14,23 +13,17 @@ import {
   AlignVerticalJustifyEnd,
   AlignVerticalJustifyStart,
   AlignVerticalSpaceBetween,
-  Bold,
   BringToFront,
   ChevronDown,
   Circle,
   Clock,
   CloudUpload,
   CopyPlus,
-  Crown,
   Download,
   Eye,
   EyeOff,
-  Folder,
-  Grid2x2,
   Image as ImageIcon,
-  Italic,
   Layers3,
-  LayoutTemplate,
   Lock,
   MessageCircle,
   MousePointer2,
@@ -46,7 +39,9 @@ import {
   Triangle,
   Type,
   Redo2,
-  Underline,
+  SendToBack,
+  StepBack,
+  StepForward,
   Undo2,
   WandSparkles,
   type LucideIcon,
@@ -82,11 +77,13 @@ import {
   createShapeElement,
   createTextElement,
   deleteElements,
+  deletePage,
   distributePageElements,
   duplicateElements,
   duplicateElementBehind,
   findElement,
   findSelectedElements,
+  getElementLayerPosition,
   getSelectionElementIds,
   groupElements,
   insertPageAfter,
@@ -127,6 +124,10 @@ import {
   type LibraryAsset,
 } from "@/editor/assets"
 import {
+  filterBackgroundPalettes,
+  normalizeBackgroundColorForPicker,
+} from "@/editor/backgrounds"
+import {
   createDocumentFingerprint,
   createProjectVersionDocument,
   createProjectVersionDraft,
@@ -163,7 +164,7 @@ import {
   type CommentRecord,
   type EditorComment,
 } from "@/editor/comments"
-import { createWorkspaceStats, listRecentProjects } from "@/editor/dashboard"
+import { listRecentProjects } from "@/editor/dashboard"
 import {
   SHARE_ACCESS_OPTIONS,
   createProjectShareDraft,
@@ -175,16 +176,15 @@ import {
 } from "@/editor/sharing"
 import { filterSearchItems } from "@/editor/search"
 import { snapElementPosition, type SnapGuide } from "@/editor/snapping"
+import { getEditorWheelZoom, getZoomedScrollPosition } from "@/editor/zoom"
 import {
   DESIGN_FORMATS,
-  DESIGN_TEMPLATES,
   createBlankDocumentForFormat,
-  createDocumentFromTemplate,
-  createDocumentFromSharedTemplate,
+  createBlankDocumentForSize,
   resizeDocumentToFormat,
   createSharedTemplateDraft,
   type DesignFormatId,
-  type DesignTemplateId,
+  type CustomDesignSize,
   type SharedTemplateRecord,
   type SharedTemplateSummary,
 } from "@/editor/templates"
@@ -195,6 +195,8 @@ import {
   getExportMimeType,
   type ExportFormatId,
 } from "@/editor/export"
+import { WorkspaceHome } from "@/components/dashboard/workspace-home"
+import { CanvasContextMenu } from "@/components/editor/canvas-context-menu"
 import {
   EditorContextSidebar,
   EditorFooter,
@@ -222,6 +224,12 @@ type DragSelection = {
   pageId: string
   start: { x: number; y: number }
   end: { x: number; y: number }
+} | null
+type ElementContextMenu = {
+  pageId: string
+  elementId: string
+  x: number
+  y: number
 } | null
 type AutosaveStatus = "local" | "saved" | "saving" | "loading" | "error"
 type ProjectPersistence = {
@@ -282,8 +290,11 @@ const backgroundSwatches = ["#ffffff", "#f8fafc", "#fef3c7", "#d9f99d", "#ccfbf1
 const SHOW_INSPECTOR = true
 const SHAPE_DRAG_MIME = "application/x-bacan-shape"
 const MAX_CANVAS_PREVIEW_SIZE = 720
+const MAX_ZOOMED_CANVAS_PREVIEW_SIZE = 1536
+const MIN_CANVAS_PREVIEW_SCALE = 0.05
 const SNAP_THRESHOLD_SCREEN_PX = 8
 const AUTOSAVE_DELAY_MS = 900
+const PAGE_EXIT_FALLBACK_MS = 420
 
 const localProjectPersistence: ProjectPersistence = {
   isEnabled: false,
@@ -355,27 +366,19 @@ type ToolId =
   | "layers"
   | "elements"
   | "text"
-  | "brand"
   | "uploads"
   | "tools"
   | "projects"
-  | "apps"
-  | "content"
   | "photos"
   | "background"
   | "comments"
 
 const sidebarTools: EditorToolItem<ToolId>[] = [
-  { id: "templates", label: "Plantillas", icon: LayoutTemplate },
   { id: "layers", label: "Capas", icon: Layers3 },
   { id: "elements", label: "Elementos", icon: Shapes },
   { id: "text", label: "Texto", icon: Type },
-  { id: "brand", label: "Marca", icon: Crown },
   { id: "uploads", label: "Archivos subidos", shortLabel: "Archivos su...", icon: CloudUpload },
   { id: "tools", label: "Herramientas", shortLabel: "Herramient...", icon: PenLine },
-  { id: "projects", label: "Proyectos", icon: Folder },
-  { id: "apps", label: "Apps", icon: AppWindow },
-  { id: "content", label: "Contenido magico", shortLabel: "Contenido ...", icon: WandSparkles },
   { id: "photos", label: "Fotos", icon: ImageIcon },
   { id: "background", label: "Fondo", icon: Palette },
   { id: "comments", label: "Comentarios", shortLabel: "Comentar...", icon: MessageCircle },
@@ -625,6 +628,7 @@ function EditableElement({
   onAltDragStart,
   onDragMove,
   onDragEnd,
+  onContextMenu,
   onTextDoubleClick,
   showSelectionControls,
 }: {
@@ -636,6 +640,7 @@ function EditableElement({
   onAltDragStart: () => void
   onDragMove: (position: { x: number; y: number }) => { x: number; y: number }
   onDragEnd: () => void
+  onContextMenu: (position: { x: number; y: number }) => void
   onTextDoubleClick: () => void
   showSelectionControls: boolean
 }) {
@@ -701,6 +706,11 @@ function EditableElement({
         }}
         onClick={(event) => onSelect(event.evt.shiftKey || event.evt.metaKey || event.evt.ctrlKey)}
         onTap={() => onSelect(false)}
+        onContextMenu={(event) => {
+          event.evt.preventDefault()
+          event.cancelBubble = true
+          onContextMenu({ x: event.evt.clientX, y: event.evt.clientY })
+        }}
         onDblClick={() => {
           if (element.type === "text") {
             onTextDoubleClick()
@@ -794,7 +804,7 @@ function PanelSearch({
   onChange: (value: string) => void
 }) {
   return (
-    <label className="flex h-12 items-center gap-3 rounded-md border border-white/10 bg-[#0e1115] px-3 text-[#9aa5a1] shadow-inner shadow-black/20 focus-within:border-[#9cff6d]/50 focus-within:ring-2 focus-within:ring-[#9cff6d]/15">
+    <label className="flex h-12 items-center gap-3 rounded-md border border-white/10 bg-[#0e1115] px-3 text-[#9aa5a1] focus-within:border-[#9cff6d]/50 focus-within:ring-2 focus-within:ring-[#9cff6d]/15">
       <Search className="size-5 shrink-0 text-[#9cff6d]" />
       <input
         className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[#f6f7ef] outline-none placeholder:text-[#6f7a75]"
@@ -803,18 +813,6 @@ function PanelSearch({
         onChange={(event) => onChange(event.target.value)}
       />
     </label>
-  )
-}
-
-function TextPreset({ label, size, onClick }: { label: string; size: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      className="flex h-16 w-full items-center rounded-md border border-white/10 bg-[#181c20] px-4 text-left font-bold text-[#f6f7ef] transition hover:border-[#9cff6d]/55 hover:bg-[#1d2422]"
-      onClick={onClick}
-    >
-      <span className={size}>{label}</span>
-    </button>
   )
 }
 
@@ -916,7 +914,7 @@ function SharedProjectPreview({
               <Badge className="bg-white text-slate-950">{pageIndex + 1}</Badge>
               <h2 className="text-sm font-bold">{page.name}</h2>
             </div>
-            <div className="mx-auto w-fit bg-white shadow-[0_20px_60px_rgba(0,0,0,0.36)] ring-1 ring-black/40">
+            <div className="mx-auto w-fit bg-white ring-1 ring-black/40">
               <Stage width={previewWidth} height={previewHeight} scaleX={previewScale} scaleY={previewScale}>
                 <KonvaLayer>
                   <Rect width={documentSize.width} height={documentSize.height} fill={page.background} />
@@ -972,7 +970,6 @@ function EditorApp({
   commentPersistence,
   sharePersistence,
   presencePersistence,
-  sharedTemplatePersistence,
 }: {
   persistence: ProjectPersistence
   versionPersistence: ProjectVersionPersistence
@@ -1000,31 +997,48 @@ function EditorApp({
   const [commentError, setCommentError] = useState("")
   const [shareAccess, setShareAccess] = useState<ShareAccess>("comment")
   const [shareStatus, setShareStatus] = useState("")
-  const [sharedTemplateName, setSharedTemplateName] = useState("")
-  const [sharedTemplateDescription, setSharedTemplateDescription] = useState("")
-  const [sharedTemplateAuthor, setSharedTemplateAuthor] = useState("Equipo")
-  const [sharedTemplateStatus, setSharedTemplateStatus] = useState("")
   const [localAssets, setLocalAssets] = useState<LibraryAsset[]>([])
   const [workspaceView, setWorkspaceView] = useState<"home" | "editor">("home")
   const [activePageId, setActivePageId] = useState<string | null>(null)
-  const [activeTool, setActiveTool] = useState<ToolId>("templates")
+  const [activeTool, setActiveTool] = useState<ToolId>("layers")
   const [panelSearchQuery, setPanelSearchQuery] = useState("")
+  const [expandedBackgroundPaletteId, setExpandedBackgroundPaletteId] = useState<string | null>(null)
   const [exportOptions, setExportOptions] = useState(() => createExportOptions())
   const [animatingPageId, setAnimatingPageId] = useState<string | null>(null)
+  const [removingPageId, setRemovingPageId] = useState<string | null>(null)
   const [selection, setSelection] = useState<Selection>(null)
+  const [elementContextMenu, setElementContextMenu] = useState<ElementContextMenu>(null)
   const [editingText, setEditingText] = useState("")
   const [snapPreview, setSnapPreview] = useState<SnapPreview>(null)
   const [dragSelection, setDragSelection] = useState<DragSelection>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [pagePendingDeletion, setPagePendingDeletion] = useState<string | null>(null)
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const savedTheme = localStorage.getItem("bacan-editor-theme")
+    return savedTheme === "light" ? "light" : "dark"
+  })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasViewportRef = useRef<HTMLDivElement>(null)
   const stageRefs = useRef<StageMap>({})
   const altDuplicatedDragRef = useRef<string | null>(null)
   const document = documentHistory.present
   const lastSavedFingerprintRef = useRef(createDocumentFingerprint(document))
-  const [canvasPreviewScale, setCanvasPreviewScale] = useState(MAX_CANVAS_PREVIEW_SIZE / CANVAS_SIZE.width)
+  const initialCanvasPreviewScale = MAX_CANVAS_PREVIEW_SIZE / CANVAS_SIZE.width
+  const fittedCanvasPreviewScaleRef = useRef(initialCanvasPreviewScale)
+  const hasManualCanvasZoomRef = useRef(false)
+  const pendingZoomAnchorRef = useRef<{
+    pointer: { x: number; y: number }
+    scroll: { left: number; top: number }
+    previousContentSize: { width: number; height: number }
+  } | null>(null)
+  const [canvasPreviewScale, setCanvasPreviewScale] = useState(initialCanvasPreviewScale)
   const canUndo = documentHistory.past.length > 0
   const canRedo = documentHistory.future.length > 0
+
+  useEffect(() => {
+    window.document.documentElement.classList.toggle("dark", theme === "dark")
+    localStorage.setItem("bacan-editor-theme", theme)
+  }, [theme])
 
   const refreshComments = useCallback(async () => {
     if (!commentPersistence.isEnabled || !currentProjectId) {
@@ -1054,6 +1068,11 @@ function EditorApp({
       })
     })
   }, [])
+
+  const completePageDeletion = useCallback((pageId: string) => {
+    setDocument((currentDocument) => deletePage(currentDocument, pageId))
+    setRemovingPageId((currentPageId) => (currentPageId === pageId ? null : currentPageId))
+  }, [setDocument])
 
   const replaceDocumentHistory = useCallback((nextDocument: EditorDocument) => {
     setDocumentHistory((currentHistory) => replaceHistoryPresent(currentHistory, nextDocument))
@@ -1092,17 +1111,7 @@ function EditorApp({
   const remoteCollaborators = presencePersistence.collaborators.filter((collaborator) => !collaborator.isSelf)
   const totalElements = document.pages.reduce((count, page) => count + page.elements.length, 0)
   const assets = assetPersistence.isEnabled ? assetPersistence.assets : localAssets
-  const recentProjects = useMemo(() => listRecentProjects(persistence.projects, 4), [persistence.projects])
-  const workspaceStats = useMemo(
-    () =>
-      createWorkspaceStats({
-        projects: persistence.projects,
-        assets,
-        sharedTemplates: sharedTemplatePersistence.templates,
-        builtInTemplateCount: DESIGN_TEMPLATES.length,
-      }),
-    [assets, persistence.projects, sharedTemplatePersistence.templates],
-  )
+  const recentProjects = useMemo(() => listRecentProjects(persistence.projects, 3), [persistence.projects])
   const documentSize = document.size ?? CANVAS_SIZE
   const canvasPreviewWidth = Math.round(documentSize.width * canvasPreviewScale)
   const canvasPreviewHeight = Math.round(documentSize.height * canvasPreviewScale)
@@ -1110,6 +1119,24 @@ function EditorApp({
     ? createDragSelectionBounds(dragSelection.start, dragSelection.end)
     : null
   const showSelectionControls = !isExporting
+  const contextMenuLayerPosition = useMemo(
+    () =>
+      elementContextMenu
+        ? getElementLayerPosition(document, elementContextMenu.pageId, elementContextMenu.elementId)
+        : null,
+    [document, elementContextMenu],
+  )
+  const contextMenuElement = useMemo(
+    () =>
+      elementContextMenu
+        ? document.pages
+            .find((page) => page.id === elementContextMenu.pageId)
+            ?.elements.find((element) => element.id === elementContextMenu.elementId) ?? null
+        : null,
+    [document, elementContextMenu],
+  )
+
+  const closeElementContextMenu = useCallback(() => setElementContextMenu(null), [])
 
   useEffect(() => {
     if (!document.pages.some((page) => page.id === activePageId)) {
@@ -1183,18 +1210,25 @@ function EditorApp({
       return
     }
 
+    hasManualCanvasZoomRef.current = false
+
     const resizePreview = () => {
+      if (hasManualCanvasZoomRef.current) {
+        return
+      }
+
       const availableWidth = Math.max(1, viewport.clientWidth - 32)
       const availableHeight = Math.max(1, viewport.clientHeight - 64)
       const maxPreviewScale = MAX_CANVAS_PREVIEW_SIZE / Math.max(documentSize.width, documentSize.height)
-
-      setCanvasPreviewScale(
-        Math.min(
-          availableWidth / documentSize.width,
-          availableHeight / documentSize.height,
-          maxPreviewScale,
-        ),
+      const fittedScale = Math.min(
+        availableWidth / documentSize.width,
+        availableHeight / documentSize.height,
+        maxPreviewScale,
       )
+
+      fittedCanvasPreviewScaleRef.current = fittedScale
+      pendingZoomAnchorRef.current = null
+      setCanvasPreviewScale(fittedScale)
     }
 
     resizePreview()
@@ -1206,6 +1240,96 @@ function EditorApp({
   }, [documentSize.height, documentSize.width])
 
   useEffect(() => {
+    const viewport = canvasViewportRef.current
+
+    if (!viewport) {
+      return
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      const deltaMultiplier =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? viewport.clientHeight
+            : 1
+      const fittedScale = fittedCanvasPreviewScaleRef.current
+      const maximumScale = Math.max(
+        fittedScale,
+        Math.min(
+          1,
+          MAX_ZOOMED_CANVAS_PREVIEW_SIZE / Math.max(documentSize.width, documentSize.height),
+        ),
+      )
+      const nextScale = getEditorWheelZoom({
+        currentScale: canvasPreviewScale,
+        deltaY: event.deltaY * deltaMultiplier,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        minScale: Math.min(MIN_CANVAS_PREVIEW_SCALE, fittedScale),
+        maxScale: maximumScale,
+      })
+
+      if (nextScale === null) {
+        return
+      }
+
+      event.preventDefault()
+
+      if (nextScale === canvasPreviewScale) {
+        return
+      }
+
+      const viewportBounds = viewport.getBoundingClientRect()
+      pendingZoomAnchorRef.current = {
+        pointer: {
+          x: event.clientX - viewportBounds.left,
+          y: event.clientY - viewportBounds.top,
+        },
+        scroll: {
+          left: viewport.scrollLeft,
+          top: viewport.scrollTop,
+        },
+        previousContentSize: {
+          width: viewport.scrollWidth,
+          height: viewport.scrollHeight,
+        },
+      }
+      hasManualCanvasZoomRef.current = true
+      setCanvasPreviewScale(nextScale)
+    }
+
+    viewport.addEventListener("wheel", handleWheel, { passive: false })
+
+    return () => viewport.removeEventListener("wheel", handleWheel)
+  }, [canvasPreviewScale, documentSize.height, documentSize.width])
+
+  useLayoutEffect(() => {
+    const viewport = canvasViewportRef.current
+    const anchor = pendingZoomAnchorRef.current
+
+    if (!viewport || !anchor) {
+      return
+    }
+
+    pendingZoomAnchorRef.current = null
+    const nextScroll = getZoomedScrollPosition({
+      ...anchor,
+      nextContentSize: {
+        width: viewport.scrollWidth,
+        height: viewport.scrollHeight,
+      },
+      viewportSize: {
+        width: viewport.clientWidth,
+        height: viewport.clientHeight,
+      },
+    })
+
+    viewport.scrollLeft = nextScroll.left
+    viewport.scrollTop = nextScroll.top
+  }, [canvasPreviewScale])
+
+  useEffect(() => {
     if (!animatingPageId) {
       return
     }
@@ -1214,6 +1338,19 @@ function EditorApp({
 
     return () => window.clearTimeout(timeoutId)
   }, [animatingPageId])
+
+  useEffect(() => {
+    if (!removingPageId) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(
+      () => completePageDeletion(removingPageId),
+      PAGE_EXIT_FALLBACK_MS,
+    )
+
+    return () => window.clearTimeout(timeoutId)
+  }, [completePageDeletion, removingPageId])
 
   useEffect(() => {
     if (!persistence.isEnabled) {
@@ -1425,19 +1562,6 @@ function EditorApp({
     }
   }
 
-  const startNewProject = useCallback(() => {
-    const nextDocument = createInitialDocument(createId)
-
-    replaceDocumentHistory(nextDocument)
-    setCurrentProjectId(null)
-    setActivePageId(nextDocument.pages[0]?.id ?? null)
-    setSelection(null)
-    setWorkspaceView("editor")
-    lastSavedFingerprintRef.current = createDocumentFingerprint(nextDocument)
-    setAutosaveError("")
-    setAutosaveStatus(persistence.isEnabled ? "saved" : "local")
-  }, [persistence.isEnabled, replaceDocumentHistory])
-
   const setDocumentName = (name: string) => {
     setDocument((currentDocument) => ({ ...currentDocument, name }))
   }
@@ -1526,7 +1650,7 @@ function EditorApp({
     setSelection({ pageId, elementId: element.id })
   }
 
-  const addAssetFromFile = async (file: File) => {
+  const addAssetFromFile = async (file: File, pageId = resolvedActivePageId) => {
     setAssetUploadError("")
 
     try {
@@ -1541,7 +1665,7 @@ function EditorApp({
         setLocalAssets((currentAssets) => [asset, ...currentAssets])
       }
 
-      addImageAssetToPage(asset, imageSize)
+      addImageAssetToPage(asset, imageSize, pageId)
     } catch (error) {
       setAssetUploadError(error instanceof Error ? error.message : "No se pudo subir la imagen")
     }
@@ -1617,17 +1741,35 @@ function EditorApp({
     addShape(shapeType, pageId, { x, y })
   }
 
+  const handlePageDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (event.dataTransfer.types.includes(SHAPE_DRAG_MIME) || event.dataTransfer.types.includes("Files")) {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = "copy"
+    }
+  }
+
+  const handlePageDrop = (event: DragEvent<HTMLDivElement>, pageId: string) => {
+    const files = Array.from(event.dataTransfer.files)
+
+    if (files.length > 0) {
+      event.preventDefault()
+      files.forEach((file) => void addAssetFromFile(file, pageId))
+      return
+    }
+
+    dropShapeOnPage(event, pageId)
+  }
+
   const addNewPageAfter = (pageId: string) => {
-    let nextPageId: string | null = null
+    if (removingPageId) {
+      return
+    }
 
-    setDocument((currentDocument) => {
-      const result = insertPageAfter(currentDocument, pageId, createId)
-      nextPageId = result.pageId
-      return result.document
-    })
+    const result = insertPageAfter(document, pageId, createId)
 
-    setActivePageId(nextPageId)
-    setAnimatingPageId(nextPageId)
+    setDocument(result.document)
+    setActivePageId(result.pageId)
+    setAnimatingPageId(result.pageId)
     setSelection(null)
   }
 
@@ -1637,6 +1779,42 @@ function EditorApp({
     if (targetPageId) {
       addNewPageAfter(targetPageId)
     }
+  }
+
+  const removePage = (pageId: string) => {
+    if (removingPageId) {
+      return
+    }
+
+    const pageIndex = document.pages.findIndex((page) => page.id === pageId)
+    const page = document.pages[pageIndex]
+
+    if (!page || document.pages.length <= 1) {
+      return
+    }
+
+    if (page.elements.length > 0) {
+      setPagePendingDeletion(pageId)
+      return
+    }
+
+    confirmPageDeletion(pageId)
+  }
+
+  const confirmPageDeletion = (pageId = pagePendingDeletion) => {
+    if (!pageId || removingPageId) {
+      return
+    }
+
+    const pageIndex = document.pages.findIndex((page) => page.id === pageId)
+    const nextActivePageId = document.pages[pageIndex + 1]?.id ?? document.pages[pageIndex - 1]?.id ?? null
+
+    if (resolvedActivePageId === pageId) {
+      setActivePageId(nextActivePageId)
+    }
+    setSelection(null)
+    setPagePendingDeletion(null)
+    setRemovingPageId(pageId)
   }
 
   const updatePageBackground = (pageId: string, background: string) => {
@@ -1722,6 +1900,55 @@ function EditorApp({
     } catch (error) {
       setCommentError(error instanceof Error ? error.message : "No se pudo crear el comentario")
     }
+  }
+
+  const openElementContextMenu = (
+    pageId: string,
+    elementId: string,
+    position: { x: number; y: number },
+  ) => {
+    setActivePageId(pageId)
+    setSelection({ pageId, elementId })
+    setSnapPreview(null)
+    setElementContextMenu({ pageId, elementId, ...position })
+  }
+
+  const updateContextMenuElement = (
+    update: (document: EditorDocument, pageId: string, elementId: string) => EditorDocument,
+  ) => {
+    if (!elementContextMenu) {
+      return
+    }
+
+    const { pageId, elementId } = elementContextMenu
+    setDocument((currentDocument) => update(currentDocument, pageId, elementId))
+  }
+
+  const duplicateContextMenuElement = () => {
+    if (!elementContextMenu) {
+      return
+    }
+
+    const { pageId, elementId } = elementContextMenu
+    setDocument((currentDocument) => {
+      const result = duplicateElements(currentDocument, pageId, [elementId], createId)
+
+      if (result.duplicatedIds[0]) {
+        setSelection({ pageId, elementId: result.duplicatedIds[0] })
+      }
+
+      return result.document
+    })
+  }
+
+  const removeContextMenuElement = () => {
+    if (!elementContextMenu) {
+      return
+    }
+
+    const { pageId, elementId } = elementContextMenu
+    setDocument((currentDocument) => deleteElements(currentDocument, pageId, [elementId]))
+    setSelection(null)
   }
 
   const removeSelected = () => {
@@ -1978,19 +2205,21 @@ function EditorApp({
             ? "Sin guardar"
             : "Guardado"
 
-  const applyTemplate = (templateId: DesignTemplateId) => {
-    const nextDocument = createDocumentFromTemplate(templateId, createId)
+  const createBlankFormat = (formatId: DesignFormatId) => {
+    const nextDocument = createBlankDocumentForFormat(formatId, createId)
 
     replaceDocumentHistory(nextDocument)
     setCurrentProjectId(null)
     setActivePageId(nextDocument.pages[0]?.id ?? null)
     setSelection(null)
     setWorkspaceView("editor")
+    lastSavedFingerprintRef.current = createDocumentFingerprint(nextDocument)
     setAutosaveError("")
+    setAutosaveStatus(persistence.isEnabled ? "saved" : "local")
   }
 
-  const createBlankFormat = (formatId: DesignFormatId) => {
-    const nextDocument = createBlankDocumentForFormat(formatId, createId)
+  const createBlankCustomSize = (size: CustomDesignSize) => {
+    const nextDocument = createBlankDocumentForSize(size, createId)
 
     replaceDocumentHistory(nextDocument)
     setCurrentProjectId(null)
@@ -2006,47 +2235,6 @@ function EditorApp({
     setDocument((currentDocument) => resizeDocumentToFormat(currentDocument, formatId))
   }
 
-  const publishCurrentDocumentAsTemplate = async () => {
-    if (!sharedTemplatePersistence.isEnabled) {
-      setSharedTemplateStatus("Conecta Convex para publicar plantillas.")
-      return
-    }
-
-    const draft = createSharedTemplateDraft({
-      document,
-      name: sharedTemplateName || document.name,
-      description: sharedTemplateDescription,
-      authorName: sharedTemplateAuthor,
-    })
-
-    try {
-      await sharedTemplatePersistence.publishTemplate(draft)
-      setSharedTemplateName("")
-      setSharedTemplateDescription("")
-      setSharedTemplateStatus("Plantilla publicada.")
-    } catch (error) {
-      setSharedTemplateStatus(error instanceof Error ? error.message : "No se pudo publicar la plantilla.")
-    }
-  }
-
-  const applySharedTemplate = async (templateId: string) => {
-    const template = await sharedTemplatePersistence.loadTemplate(templateId)
-
-    if (!template || !isEditorDocument(template.canvas)) {
-      setSharedTemplateStatus("No se pudo abrir esta plantilla.")
-      return
-    }
-
-    const nextDocument = createDocumentFromSharedTemplate(template, createId)
-
-    replaceDocumentHistory(nextDocument)
-    setCurrentProjectId(null)
-    setActivePageId(nextDocument.pages[0]?.id ?? null)
-    setSelection(null)
-    setWorkspaceView("editor")
-    setSharedTemplateStatus("")
-  }
-
   const renderPanelSearch = (placeholder: string) => (
     <PanelSearch
       placeholder={placeholder}
@@ -2057,18 +2245,13 @@ function EditorApp({
 
   const renderToolPanel = () => {
     const filteredShapes = filterSearchItems(SHAPE_OPTIONS, panelSearchQuery, ["label", "type"])
-    const textPresets = [
-      { label: "Titulo", size: "text-4xl" },
-      { label: "Subtitulo", size: "text-2xl" },
-      { label: "Agregar algo de texto", size: "text-base" },
-    ]
-    const filteredTextPresets = filterSearchItems(textPresets, panelSearchQuery, ["label"])
     const filteredAssets = filterSearchItems(assets, panelSearchQuery, ["name"])
     const filteredBackgroundSwatches = filterSearchItems(
       backgroundSwatches.map((color) => ({ color })),
       panelSearchQuery,
       ["color"],
     ).map((swatch) => swatch.color)
+    const filteredBackgroundPalettes = filterBackgroundPalettes(panelSearchQuery)
     const filteredProjects = filterSearchItems(persistence.projects, panelSearchQuery, [
       "name",
       (project) => `${project.pageCount} paginas ${project.elementCount} elementos`,
@@ -2077,16 +2260,6 @@ function EditorApp({
       "name",
       "category",
       (format) => `${format.size.width} ${format.size.height}`,
-    ])
-    const filteredDesignTemplates = filterSearchItems(DESIGN_TEMPLATES, panelSearchQuery, [
-      "name",
-      "description",
-      "formatId",
-    ])
-    const filteredSharedTemplates = filterSearchItems(sharedTemplatePersistence.templates, panelSearchQuery, [
-      "name",
-      "description",
-      "authorName",
     ])
     const layerItems = [...(activePage?.elements ?? [])].reverse()
     const filteredLayerItems = filterSearchItems(layerItems, panelSearchQuery, ["name", "type"])
@@ -2242,18 +2415,10 @@ function EditorApp({
     if (activeTool === "text") {
       return (
         <>
-          {renderPanelSearch("Busca fuentes y combinaciones")}
           <Button className="h-12 w-full bg-[#9cff6d] text-base font-bold text-[#09100d] hover:bg-[#8de85f]" onClick={addText}>
             <Type data-icon="inline-start" />
             Agregar caja de texto
           </Button>
-          <Button className="h-11 w-full border-white/15 bg-transparent text-slate-100 hover:bg-white/10" variant="outline">
-            <WandSparkles data-icon="inline-start" />
-            Texto Magico
-          </Button>
-          {filteredTextPresets.map((preset) => (
-            <TextPreset key={preset.label} label={preset.label} size={preset.size} onClick={addText} />
-          ))}
         </>
       )
     }
@@ -2317,21 +2482,127 @@ function EditorApp({
     }
 
     if (activeTool === "background") {
+      const activeBackgroundColor = normalizeBackgroundColorForPicker(activePage?.background ?? "#ffffff")
+
       return (
         <>
           {renderPanelSearch("Busca fondos")}
-          <div className="grid grid-cols-4 gap-2">
-            {filteredBackgroundSwatches.map((color) => (
-              <button
-                key={color}
-                type="button"
-                className="aspect-square rounded-md border border-white/15 shadow-sm transition hover:scale-[1.03]"
-                style={{ backgroundColor: color }}
-                aria-label={`Fondo ${color}`}
-                onClick={() => activePage ? updatePageBackground(activePage.id, color) : null}
+
+          <section className="editor-background-controls space-y-2">
+            <Label htmlFor="custom-background-color">Color personalizado</Label>
+            <div className="editor-custom-background-color flex items-center gap-3 rounded-md border border-white/10 bg-[#181c20] p-2">
+              <input
+                id="custom-background-color"
+                type="color"
+                value={activeBackgroundColor}
+                className="editor-color-picker h-10 w-14 shrink-0 cursor-pointer rounded-md bg-transparent"
+                aria-label="Elegir color de fondo personalizado"
+                onChange={(event) => {
+                  if (activePage) {
+                    updatePageBackground(activePage.id, event.target.value)
+                  }
+                }}
               />
-            ))}
-          </div>
+              <span className="font-mono text-sm font-semibold uppercase text-slate-300">
+                {activeBackgroundColor}
+              </span>
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Colores rapidos</h3>
+            <div className="grid grid-cols-4 gap-2">
+              {filteredBackgroundSwatches.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`aspect-square rounded-md border-2 transition-colors hover:border-[#9cff6d] ${
+                    activeBackgroundColor === color.toLowerCase()
+                      ? "border-[#9cff6d]"
+                      : "border-white/15"
+                  }`}
+                  style={{ backgroundColor: color }}
+                  aria-label={`Fondo ${color}`}
+                  aria-pressed={activeBackgroundColor === color.toLowerCase()}
+                  onClick={() => activePage ? updatePageBackground(activePage.id, color) : null}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Paletas</h3>
+            <div className="space-y-2">
+              {filteredBackgroundPalettes.map((palette) => {
+                const isExpanded = expandedBackgroundPaletteId === palette.id
+
+                return (
+                  <article
+                    key={palette.id}
+                    className="editor-background-palette overflow-hidden rounded-md border border-white/10 bg-[#181c20]"
+                  >
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-white/5"
+                      aria-expanded={isExpanded}
+                      aria-controls={`background-palette-${palette.id}`}
+                      onClick={() => setExpandedBackgroundPaletteId(isExpanded ? null : palette.id)}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-100">
+                        {palette.name}
+                      </span>
+                      <span className="flex shrink-0 overflow-hidden rounded-sm border border-white/10" aria-hidden="true">
+                        {palette.colors.slice(0, 4).map((color) => (
+                          <span key={color} className="size-4" style={{ backgroundColor: color }} />
+                        ))}
+                      </span>
+                      <ChevronDown
+                        className={`size-4 shrink-0 text-slate-400 transition-transform duration-200 ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    <div
+                      id={`background-palette-${palette.id}`}
+                      className="editor-palette-colors"
+                      data-expanded={isExpanded}
+                      inert={!isExpanded}
+                    >
+                      <div className="min-h-0 overflow-hidden">
+                        <div className="grid grid-cols-5 gap-2 border-t border-white/10 p-3">
+                          {palette.colors.map((color) => {
+                            const isActive = activeBackgroundColor === color.toLowerCase()
+
+                            return (
+                              <button
+                                key={color}
+                                type="button"
+                                className={`aspect-square rounded-sm border-2 transition-colors hover:border-[#9cff6d] ${
+                                  isActive
+                                    ? "border-[#9cff6d]"
+                                    : "border-white/15"
+                                }`}
+                                style={{ backgroundColor: color }}
+                                aria-label={`Usar ${color} de la paleta ${palette.name}`}
+                                aria-pressed={isActive}
+                                onClick={() => activePage ? updatePageBackground(activePage.id, color) : null}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+
+          {filteredBackgroundSwatches.length === 0 && filteredBackgroundPalettes.length === 0 ? (
+            <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
+              No hay fondos para esa busqueda.
+            </div>
+          ) : null}
         </>
       )
     }
@@ -2344,7 +2615,7 @@ function EditorApp({
             <Button
               className="border-white/15 bg-transparent text-slate-100 hover:bg-white/10"
               variant="outline"
-              onClick={startNewProject}
+              onClick={() => createBlankFormat("square-post")}
             >
               <Plus data-icon="inline-start" />
               Nuevo
@@ -2684,7 +2955,7 @@ function EditorApp({
 
     return (
       <>
-        {renderPanelSearch("Busca plantillas")}
+        {renderPanelSearch("Busca tamaños")}
         <section className="space-y-2">
           <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Tamanos</h3>
           <div className="grid grid-cols-2 gap-2">
@@ -2718,232 +2989,24 @@ function EditorApp({
             ))}
           </div>
         </section>
-        <section className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Plantillas</h3>
-          <div className="grid gap-3">
-            {filteredDesignTemplates.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                No hay plantillas para esa busqueda.
-              </div>
-            ) : null}
-            {filteredDesignTemplates.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                className="overflow-hidden rounded-md border border-white/10 bg-[#181c20] text-left transition hover:border-[#9cff6d]"
-                onClick={() => applyTemplate(template.id)}
-              >
-                <span className={`block h-24 bg-gradient-to-br ${template.accent}`} />
-                <span className="block px-3 pt-2 text-sm font-semibold text-white">{template.name}</span>
-                <span className="block px-3 pb-3 pt-1 text-xs text-slate-400">{template.description}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-        <section className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Compartidas</h3>
-          <div className="space-y-2 rounded-md border border-white/10 bg-[#181c20] p-3">
-            <Input
-              value={sharedTemplateName}
-              placeholder={document.name}
-              onChange={(event) => setSharedTemplateName(event.target.value)}
-              disabled={!sharedTemplatePersistence.isEnabled}
-            />
-            <Input
-              value={sharedTemplateDescription}
-              placeholder="Descripcion"
-              onChange={(event) => setSharedTemplateDescription(event.target.value)}
-              disabled={!sharedTemplatePersistence.isEnabled}
-            />
-            <Input
-              value={sharedTemplateAuthor}
-              placeholder="Autor"
-              onChange={(event) => setSharedTemplateAuthor(event.target.value)}
-              disabled={!sharedTemplatePersistence.isEnabled}
-            />
-            <Button
-              type="button"
-              className="w-full"
-              onClick={publishCurrentDocumentAsTemplate}
-              disabled={!sharedTemplatePersistence.isEnabled}
-            >
-              <LayoutTemplate data-icon="inline-start" />
-              Publicar plantilla
-            </Button>
-            {sharedTemplateStatus ? (
-              <p className="text-xs leading-5 text-slate-400">{sharedTemplateStatus}</p>
-            ) : null}
-            {!sharedTemplatePersistence.isEnabled ? (
-              <p className="text-xs leading-5 text-slate-500">Convex no esta conectado.</p>
-            ) : null}
-          </div>
-
-          <div className="grid gap-2">
-            {sharedTemplatePersistence.isLoading ? (
-              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                Cargando plantillas compartidas...
-              </div>
-            ) : null}
-            {!sharedTemplatePersistence.isLoading && sharedTemplatePersistence.templates.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                Todavia no hay plantillas compartidas.
-              </div>
-            ) : null}
-            {sharedTemplatePersistence.templates.length > 0 && filteredSharedTemplates.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                No hay plantillas compartidas para esa busqueda.
-              </div>
-            ) : null}
-            {filteredSharedTemplates.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                className="rounded-md border border-white/10 bg-[#121619] p-3 text-left transition hover:border-[#9cff6d]"
-                onClick={() => void applySharedTemplate(template.id)}
-              >
-                <span className="block truncate text-sm font-semibold text-white">{template.name}</span>
-                <span className="block text-xs text-slate-400">
-                  {template.pageCount} paginas - {template.elementCount} elementos
-                </span>
-                <span className="block truncate pt-1 text-xs text-slate-500">{template.authorName}</span>
-              </button>
-            ))}
-          </div>
-        </section>
       </>
     )
   }
 
   if (workspaceView === "home") {
     return (
-      <main className="min-h-screen bg-[#0d0e14] text-slate-100">
-        <header className="flex h-16 items-center justify-between border-b border-white/10 bg-[#121619] px-4">
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold text-white">Bacan</h1>
-            <p className="text-xs text-slate-400">{workspaceStats.projectCount} proyectos guardados</p>
-          </div>
-          <Button className="bg-white text-slate-950 hover:bg-slate-100" onClick={() => setWorkspaceView("editor")}>
-            <PenLine data-icon="inline-start" />
-            Abrir editor
-          </Button>
-        </header>
-
-        <div className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-4">
-              {[
-                { label: "Proyectos", value: workspaceStats.projectCount, icon: Folder },
-                { label: "Paginas", value: workspaceStats.totalPageCount, icon: Grid2x2 },
-                { label: "Assets", value: workspaceStats.assetCount, icon: ImageIcon },
-                { label: "Plantillas", value: workspaceStats.templateCount, icon: LayoutTemplate },
-              ].map((item) => {
-                const Icon = item.icon
-
-                return (
-                  <article key={item.label} className="rounded-md border border-white/10 bg-[#121619] p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                        {item.label}
-                      </span>
-                      <Icon className="size-4 text-[#9cff6d]" />
-                    </div>
-                    <strong className="text-2xl text-white">{item.value}</strong>
-                  </article>
-                )
-              })}
-            </div>
-
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-bold text-white">Recientes</h2>
-                <Button size="sm" variant="outline" onClick={startNewProject}>
-                  <Plus data-icon="inline-start" />
-                  Nuevo
-                </Button>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                {recentProjects.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-white/15 bg-[#121619] p-5 text-sm text-slate-400">
-                    No hay proyectos guardados.
-                  </div>
-                ) : null}
-                {recentProjects.map((project) => (
-                  <button
-                    key={project.id}
-                    type="button"
-                    className="rounded-md border border-white/10 bg-[#121619] p-4 text-left transition hover:border-[#9cff6d]"
-                    onClick={() => void openProject(project.id)}
-                  >
-                    <span className="block truncate text-sm font-semibold text-white">{project.name}</span>
-                    <span className="block pt-2 text-xs text-slate-400">
-                      {project.pageCount} paginas - {project.elementCount} elementos
-                    </span>
-                    <span className="block pt-1 text-xs text-slate-500">
-                      {new Date(project.updatedAt).toLocaleDateString()}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="space-y-3">
-              <h2 className="text-sm font-bold text-white">Crear por formato</h2>
-              <div className="grid gap-3 md:grid-cols-4">
-                {DESIGN_FORMATS.map((format) => (
-                  <button
-                    key={format.id}
-                    type="button"
-                    className="rounded-md border border-white/10 bg-[#121619] p-4 text-left transition hover:border-[#9cff6d]"
-                    onClick={() => createBlankFormat(format.id)}
-                  >
-                    <span className="block text-sm font-semibold text-white">{format.name}</span>
-                    <span className="block pt-2 text-xs text-slate-400">
-                      {format.size.width} x {format.size.height}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          </section>
-
-          <aside className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white">Plantillas</h2>
-              <Badge className="border-white/10 bg-white/8 text-slate-200">{workspaceStats.templateCount}</Badge>
-            </div>
-            <div className="grid gap-3">
-              {DESIGN_TEMPLATES.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  className="overflow-hidden rounded-md border border-white/10 bg-[#121619] text-left transition hover:border-[#9cff6d]"
-                  onClick={() => applyTemplate(template.id)}
-                >
-                  <span className={`block h-20 bg-gradient-to-br ${template.accent}`} />
-                  <span className="block px-3 pt-2 text-sm font-semibold text-white">{template.name}</span>
-                  <span className="block px-3 pb-3 pt-1 text-xs text-slate-400">{template.description}</span>
-                </button>
-              ))}
-              {sharedTemplatePersistence.templates.slice(0, 3).map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  className="rounded-md border border-white/10 bg-[#121619] p-3 text-left transition hover:border-[#9cff6d]"
-                  onClick={() => void applySharedTemplate(template.id)}
-                >
-                  <span className="block truncate text-sm font-semibold text-white">{template.name}</span>
-                  <span className="block pt-1 text-xs text-slate-400">{template.authorName}</span>
-                </button>
-              ))}
-            </div>
-          </aside>
-        </div>
-      </main>
+      <WorkspaceHome
+        isLoading={persistence.isLoading}
+        recentProjects={recentProjects}
+        onCreateFormat={createBlankFormat}
+        onCreateCustom={createBlankCustomSize}
+        onOpenProject={(projectId) => void openProject(projectId)}
+      />
     )
   }
 
   return (
-    <main className="min-h-screen bg-[#0d1012] text-[#f6f7ef]">
+    <main className={`min-h-screen bg-[#0d1012] text-[#f6f7ef] ${theme === "light" ? "editor-theme-light" : "editor-theme-dark"}`}>
       <input
         ref={fileInputRef}
         type="file"
@@ -2955,21 +3018,21 @@ function EditorApp({
       <EditorTopBar
         autosaveLabel={autosaveLabel}
         canSave={persistence.isEnabled && autosaveStatus !== "saving"}
-        canShare={totalElements > 0}
         documentName={document.name}
         onComments={() => setActiveTool("comments")}
         onDocumentNameChange={setDocumentName}
         onHome={() => setWorkspaceView("home")}
         onResize={() => setActiveTool("templates")}
         onSave={saveCurrentProject}
-        onShare={exportActivePage}
+        onThemeChange={setTheme}
+        theme={theme}
       />
 
-      <div className="grid min-h-[calc(100vh-4rem)] grid-cols-[76px_minmax(0,1fr)] lg:grid-cols-[76px_320px_minmax(0,1fr)] xl:grid-cols-[76px_320px_minmax(0,1fr)_320px]">
+      <div className="grid min-h-[calc(100vh-4rem)] grid-cols-[96px_minmax(0,1fr)] lg:grid-cols-[96px_320px_minmax(0,1fr)] xl:grid-cols-[96px_320px_minmax(0,1fr)_320px]">
         <EditorToolRail activeTool={activeTool} tools={sidebarTools} onSelectTool={setActiveTool} />
 
         <EditorContextSidebar
-          title={sidebarTools.find((tool) => tool.id === activeTool)?.label ?? "Herramientas"}
+          title={activeTool === "templates" ? "Redimensionar" : sidebarTools.find((tool) => tool.id === activeTool)?.label ?? "Herramientas"}
           badgeLabel={`${assets.length} assets`}
         >
           {renderToolPanel()}
@@ -3044,7 +3107,7 @@ function EditorApp({
               <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Duplicar" onClick={duplicateSelected} disabled={!hasSelection}>
                 <CopyPlus />
               </Button>
-              <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Agregar pagina" onClick={addNewPage}>
+              <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Agregar pagina" onClick={addNewPage} disabled={Boolean(removingPageId)}>
                 <SquarePlus />
               </Button>
             </>
@@ -3052,13 +3115,22 @@ function EditorApp({
           footer={
             <EditorFooter
               activePageLabel={`${resolvedActivePageId ? document.pages.findIndex((page) => page.id === resolvedActivePageId) + 1 : 1} de ${document.pages.length}`}
-              zoomLabel="61%"
+              zoomLabel={`${Math.round(canvasPreviewScale * 100)}%`}
             />
           }
         >
-            <div className="flex w-full max-w-[1120px] flex-col items-center gap-10">
+            <div className="flex w-max min-w-full flex-col items-center gap-10">
               {document.pages.map((page, pageIndex) => (
-                <section key={page.id} className={`w-full ${page.id === animatingPageId ? "bacan-page-enter" : ""}`}>
+                <section
+                  key={page.id}
+                  className={`bacan-page-transition w-full ${page.id === animatingPageId ? "bacan-page-enter" : ""} ${page.id === removingPageId ? "bacan-page-exit" : ""}`}
+                  onAnimationEnd={(event) => {
+                    if (event.animationName === "bacan-page-exit" && page.id === removingPageId) {
+                      completePageDeletion(page.id)
+                    }
+                  }}
+                >
+                  <div className="bacan-page-transition-content">
                   <div className="mx-auto mb-3 flex items-center justify-between text-[#cfd7d2]" style={{ width: canvasPreviewWidth }}>
                     <div className="flex items-center gap-2">
                       <Badge className={page.id === resolvedActivePageId ? "bg-[#dfffcf] text-[#09100d]" : "border-white/10 bg-white/8 text-[#cfd7d2]"}>
@@ -3067,27 +3139,26 @@ function EditorApp({
                       <h2 className="text-sm font-bold">{page.name}</h2>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Bloquear pagina">
-                        <Lock />
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        className="text-[#cfd7d2] hover:bg-red-500/10 hover:text-red-300"
+                        aria-label={`Eliminar ${page.name}`}
+                        onClick={() => removePage(page.id)}
+                        disabled={document.pages.length <= 1 || Boolean(removingPageId)}
+                      >
+                        <Trash2 />
                       </Button>
-                      <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Duplicar pagina" onClick={() => addNewPageAfter(page.id)}>
-                        <CopyPlus />
-                      </Button>
-                      <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Agregar pagina" onClick={() => addNewPageAfter(page.id)}>
+                      <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Agregar pagina" onClick={() => addNewPageAfter(page.id)} disabled={Boolean(removingPageId)}>
                         <SquarePlus />
                       </Button>
                     </div>
                   </div>
 
                   <div
-                    className="mx-auto w-fit overflow-hidden rounded-[3px] bg-white shadow-[0_28px_80px_rgba(0,0,0,0.46)] ring-1 ring-white/10"
-                    onDragOver={(event) => {
-                      if (event.dataTransfer.types.includes(SHAPE_DRAG_MIME)) {
-                        event.preventDefault()
-                        event.dataTransfer.dropEffect = "copy"
-                      }
-                    }}
-                    onDrop={(event) => dropShapeOnPage(event, page.id)}
+                    className="mx-auto w-fit overflow-hidden rounded-[3px] bg-white ring-1 ring-white/10"
+                    onDragOver={handlePageDragOver}
+                    onDrop={(event) => handlePageDrop(event, page.id)}
                   >
                     <Stage
                       ref={(stage) => {
@@ -3121,6 +3192,13 @@ function EditorApp({
                           setSelection(null)
                         }
                       }}
+                      onContextMenu={(event) => {
+                        event.evt.preventDefault()
+
+                        if (isCanvasBackgroundTarget(event.target)) {
+                          closeElementContextMenu()
+                        }
+                      }}
                     >
                       <KonvaLayer>
                         <Rect
@@ -3133,12 +3211,12 @@ function EditorApp({
                           <Text
                             name="canvas-placeholder"
                             text="Sube una imagen, agrega texto o inserta una forma"
-                            x={0}
+                            x={documentSize.width * 0.18}
                             y={documentSize.height / 2 - 42}
-                            width={documentSize.width}
+                            width={documentSize.width * 0.64}
                             align="center"
                             fill="#64748b"
-                            fontSize={84}
+                            fontSize={48}
                           />
                         ) : null}
                         {page.elements.map((element) => (
@@ -3195,6 +3273,9 @@ function EditorApp({
                               }
                             }}
                             onDragEnd={() => setSnapPreview(null)}
+                            onContextMenu={(position) =>
+                              openElementContextMenu(page.id, element.id, position)
+                            }
                             onTextDoubleClick={() => {
                               setActivePageId(page.id)
                               setSelection({ pageId: page.id, elementId: element.id })
@@ -3236,32 +3317,110 @@ function EditorApp({
                     </Stage>
                   </div>
                   {pageIndex === document.pages.length - 1 ? (
-                    <div className="mx-auto mt-5 flex h-12 overflow-hidden rounded-md border border-white/12 bg-[#101417] text-[#cfd7d2] shadow-[0_18px_36px_rgba(0,0,0,0.18)]" style={{ width: canvasPreviewWidth }}>
+                    <div className="editor-add-page mx-auto mt-5 flex h-12 overflow-hidden rounded-md border border-white/12 bg-[#101417] text-[#cfd7d2]" style={{ width: canvasPreviewWidth }}>
                       <button
                         type="button"
-                        className="flex flex-1 items-center justify-center gap-2 text-sm font-bold transition hover:bg-[#9cff6d]/10 hover:text-[#dfffcf]"
+                        className="flex flex-1 items-center justify-center gap-2 text-sm font-bold transition hover:bg-[#9cff6d]/10 hover:text-[#dfffcf] disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={() => addNewPageAfter(page.id)}
+                        disabled={Boolean(removingPageId)}
                       >
                         <Plus className="size-4" />
                         Agregar una pagina
                       </button>
-                      <button
-                        type="button"
-                        className="grid w-12 place-items-center border-l border-white/12 transition hover:bg-[#9cff6d]/10 hover:text-[#dfffcf]"
-                        onClick={() => addNewPageAfter(page.id)}
-                        aria-label="Mas opciones de pagina"
-                      >
-                        <ChevronDown className="size-4" />
-                      </button>
                     </div>
                   ) : null}
+                  </div>
                 </section>
               ))}
             </div>
         </EditorWorkspace>
 
+        {pagePendingDeletion ? (
+          <div
+            className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setPagePendingDeletion(null)
+            }}
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="delete-page-title"
+              aria-describedby="delete-page-description"
+              className="w-full max-w-md rounded-xl border border-white/12 bg-[#171b1f] p-5 text-slate-100"
+            >
+              <h2 id="delete-page-title" className="text-lg font-bold">¿Eliminar esta página?</h2>
+              <p id="delete-page-description" className="mt-2 text-sm leading-6 text-slate-400">
+                Esta página contiene elementos. Al eliminarla, también se eliminará todo su contenido.
+              </p>
+              <div className="mt-6 flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setPagePendingDeletion(null)}>
+                  Cancelar
+                </Button>
+                <Button type="button" className="bg-red-500 text-white hover:bg-red-400" onClick={() => confirmPageDeletion()}>
+                  <Trash2 data-icon="inline-start" />
+                  Eliminar página
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {elementContextMenu && contextMenuLayerPosition && contextMenuElement ? (
+          <CanvasContextMenu
+            x={elementContextMenu.x}
+            y={elementContextMenu.y}
+            onClose={closeElementContextMenu}
+            items={[
+              {
+                label: "Duplicar",
+                icon: CopyPlus,
+                onSelect: duplicateContextMenuElement,
+              },
+              {
+                label: "Traer adelante",
+                icon: StepForward,
+                disabled: contextMenuLayerPosition.isFront,
+                onSelect: () => updateContextMenuElement(moveElementForward),
+              },
+              {
+                label: "Enviar atras",
+                icon: StepBack,
+                disabled: contextMenuLayerPosition.isBack,
+                onSelect: () => updateContextMenuElement(moveElementBackward),
+              },
+              {
+                label: "Traer al frente",
+                icon: BringToFront,
+                disabled: contextMenuLayerPosition.isFront,
+                onSelect: () => updateContextMenuElement(moveElementToFront),
+              },
+              {
+                label: "Enviar al fondo",
+                icon: SendToBack,
+                disabled: contextMenuLayerPosition.isBack,
+                onSelect: () => updateContextMenuElement(moveElementToBack),
+              },
+              {
+                label: contextMenuElement.locked ? "Desbloquear" : "Bloquear",
+                icon: Lock,
+                separatorBefore: true,
+                onSelect: () => updateContextMenuElement(toggleElementLocked),
+              },
+              {
+                label: "Eliminar",
+                icon: Trash2,
+                destructive: true,
+                separatorBefore: true,
+                onSelect: removeContextMenuElement,
+              },
+            ]}
+          />
+        ) : null}
+
         {SHOW_INSPECTOR ? (
-        <aside className="hidden border-l border-white/8 bg-[#121619] p-4 text-slate-100 xl:block">
+        <aside className="editor-inspector hidden border-l border-white/8 bg-[#121619] p-4 text-slate-100 xl:block">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-white">Inspector</h2>
@@ -3369,43 +3528,6 @@ function EditorApp({
             </div>
           ) : selectedElement ? (
             <div className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="element-name">Nombre</Label>
-                <Input
-                  id="element-name"
-                  value={selectedElement.name}
-                  onChange={(event) => updateSelected({ name: event.target.value })}
-                />
-              </div>
-
-              <div className="space-y-3">
-                <Label>Alinear al lienzo</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { alignment: "left", icon: AlignHorizontalJustifyStart, label: "Alinear izquierda" },
-                    { alignment: "center", icon: AlignHorizontalJustifyCenter, label: "Alinear centro" },
-                    { alignment: "right", icon: AlignHorizontalJustifyEnd, label: "Alinear derecha" },
-                    { alignment: "top", icon: AlignVerticalJustifyStart, label: "Alinear arriba" },
-                    { alignment: "middle", icon: AlignVerticalJustifyCenter, label: "Alinear medio" },
-                    { alignment: "bottom", icon: AlignVerticalJustifyEnd, label: "Alinear abajo" },
-                  ].map((option) => {
-                    const Icon = option.icon
-
-                    return (
-                      <Button
-                        key={option.alignment}
-                        size="icon-sm"
-                        variant="outline"
-                        aria-label={option.label}
-                        onClick={() => alignSelectedToCanvas(option.alignment as ElementAlignment)}
-                      >
-                        <Icon />
-                      </Button>
-                    )
-                  })}
-                </div>
-              </div>
-
               {selectedTextElement ? (
                 <>
                   <div className="space-y-2">
@@ -3421,77 +3543,43 @@ function EditorApp({
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="font-family">Fuente</Label>
-                    <select
-                      id="font-family"
-	                      value={selectedTextElement.fontFamily}
-	                      onChange={(event) =>
-	                        updateSelected({ fontFamily: event.target.value as typeof selectedTextElement.fontFamily })
-	                      }
-	                      className="h-8 w-full rounded-lg border border-white/10 bg-[#0e1115] px-2 text-sm text-slate-100"
-                    >
+                    <Label>Fuente</Label>
+                    <div className="editor-font-list max-h-44 overflow-y-auto rounded-lg border border-white/10 bg-[#0e1115] p-1">
                       {FONT_OPTIONS.map((fontFamily) => (
-                        <option key={fontFamily} value={fontFamily}>
-                          {fontFamily}
-                        </option>
+                        <button
+                          key={fontFamily}
+                          type="button"
+                          className={`grid w-full grid-cols-[minmax(0,1fr)_72px] items-center gap-3 rounded-md px-2 py-2 text-left text-xs transition hover:bg-white/10 ${
+                            selectedTextElement.fontFamily === fontFamily ? "bg-[#9cff6d]/15 text-[#dfffcf]" : "text-slate-300"
+                          }`}
+                          onClick={() => updateSelected({ fontFamily })}
+                        >
+                          <span className="truncate">{fontFamily}</span>
+                          <span className="text-right text-lg text-slate-100" style={{ fontFamily }} aria-hidden="true">Aa</span>
+                        </button>
                       ))}
-                    </select>
+                    </div>
                   </div>
 
-	                  <div className="space-y-3">
-	                    <div className="flex items-center justify-between">
-	                      <Label>Tamano</Label>
-			                      <span className="text-xs text-slate-400">{selectedTextElement.fontSize}px</span>
-	                    </div>
-                    <Slider
-	                      value={[selectedTextElement.fontSize]}
-                      min={12}
-                      max={120}
-                      step={1}
-	                      onValueChange={([fontSize]) => updateSelected({ fontSize })}
-	                    />
-	                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="text-font-size">Tamano</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="text-font-size"
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={selectedTextElement.fontSize}
+                        className="w-20 text-right"
+                        onChange={(event) => {
+                          const fontSize = event.currentTarget.valueAsNumber
 
-                  <div className="space-y-3">
-                    <Label>Estilo</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button
-                        size="icon-sm"
-	                        variant={selectedTextElement.fontWeight === "bold" ? "default" : "outline"}
-                        aria-label="Negrita"
-                        onClick={() =>
-                          updateSelectedTextStyle({
-	                            fontWeight: selectedTextElement.fontWeight === "bold" ? "normal" : "bold",
-                          })
-                        }
-                      >
-                        <Bold />
-                      </Button>
-                      <Button
-                        size="icon-sm"
-	                        variant={selectedTextElement.fontStyle === "italic" ? "default" : "outline"}
-                        aria-label="Italica"
-                        onClick={() =>
-                          updateSelectedTextStyle({
-	                            fontStyle: selectedTextElement.fontStyle === "italic" ? "normal" : "italic",
-                          })
-                        }
-                      >
-                        <Italic />
-                      </Button>
-                      <Button
-                        size="icon-sm"
-	                        variant={selectedTextElement.textDecoration === "underline" ? "default" : "outline"}
-                        aria-label="Subrayado"
-                        onClick={() =>
-                          updateSelectedTextStyle({
-                            textDecoration:
-	                              selectedTextElement.textDecoration === "underline" ? "none" : "underline",
-                          })
-                        }
-                      >
-                        <Underline />
-                      </Button>
+                          if (Number.isFinite(fontSize) && fontSize > 0) {
+                            updateSelected({ fontSize })
+                          }
+                        }}
+                      />
+                      <span className="text-sm text-slate-400" aria-hidden="true">px</span>
                     </div>
                   </div>
 
@@ -3510,6 +3598,7 @@ function EditorApp({
                             key={option.value}
                             size="icon-sm"
 	                            variant={selectedTextElement.align === option.value ? "default" : "outline"}
+	                            className="w-full border-white/15 text-current"
 	                            aria-label={option.label}
 	                            onClick={() => updateSelectedTextStyle({ align: option.value as typeof selectedTextElement.align })}
                           >
@@ -3794,7 +3883,7 @@ function EditorApp({
                       <button
                         key={color}
                         type="button"
-	                        className="size-7 rounded-full border border-white/20 shadow-sm"
+	                        className="size-7 rounded-full border border-white/20"
                         style={{ backgroundColor: color }}
                         aria-label={`Usar color ${color}`}
                         onClick={() => updateSelected({ fill: color })}
@@ -3807,7 +3896,7 @@ function EditorApp({
               <Separator />
 
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={duplicateSelected}>
+                <Button className="border-white/20 bg-white/10 text-slate-100 hover:bg-white/20 hover:text-white" variant="outline" onClick={duplicateSelected}>
                   <BringToFront data-icon="inline-start" />
                   Duplicar
                 </Button>

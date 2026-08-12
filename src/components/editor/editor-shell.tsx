@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from "react"
-import { Home, MessageCircle, PenLine, Share2, type LucideIcon } from "lucide-react"
+import { Home, MessageCircle, Moon, Sun, type LucideIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,30 +17,30 @@ export type EditorToolItem<TToolId extends string> = {
 type EditorTopBarProps = {
   autosaveLabel: string
   canSave: boolean
-  canShare: boolean
   documentName: string
   onComments: () => void
   onDocumentNameChange: (name: string) => void
   onHome: () => void
   onResize: () => void
   onSave: () => void
-  onShare: () => void
+  onThemeChange: (theme: "light" | "dark") => void
+  theme: "light" | "dark"
 }
 
 export function EditorTopBar({
   autosaveLabel,
   canSave,
-  canShare,
   documentName,
   onComments,
   onDocumentNameChange,
   onHome,
   onResize,
   onSave,
-  onShare,
+  onThemeChange,
+  theme,
 }: EditorTopBarProps) {
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-white/8 bg-[#101316] px-3 text-[#f6f7ef] shadow-[0_1px_0_rgba(255,255,255,0.04),0_14px_42px_rgba(0,0,0,0.2)]">
+    <header className="editor-topbar sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-white/8 bg-[#101316] px-3 text-[#f6f7ef]">
       <div className="flex min-w-0 items-center gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -56,9 +56,6 @@ export function EditorTopBar({
           </TooltipTrigger>
           <TooltipContent>Inicio</TooltipContent>
         </Tooltip>
-        <Button variant="ghost" className="hidden text-[#dce3d7] hover:bg-[#1a2020] hover:text-white sm:inline-flex">
-          Archivo
-        </Button>
         <Button
           variant="ghost"
           className="hidden text-[#dce3d7] hover:bg-[#1a2020] hover:text-white sm:inline-flex"
@@ -74,10 +71,6 @@ export function EditorTopBar({
         >
           Redimensionar
         </Button>
-        <Button variant="ghost" className="hidden text-[#dce3d7] hover:bg-[#1a2020] hover:text-white md:inline-flex">
-          <PenLine data-icon="inline-start" />
-          Editar
-        </Button>
         <Badge className="hidden border-[#9cff6d]/25 bg-[#9cff6d]/10 text-[#d8ffba] sm:inline-flex">
           {autosaveLabel}
         </Badge>
@@ -87,15 +80,34 @@ export function EditorTopBar({
         <Input
           value={documentName}
           onChange={(event) => onDocumentNameChange(event.target.value)}
-          className="h-9 max-w-[380px] rounded-md border-white/8 bg-[#171b1e] text-center text-sm font-semibold text-[#f6f7ef] shadow-inner shadow-black/20 placeholder:text-white/40 focus-visible:border-[#9cff6d]/60 focus-visible:ring-[#9cff6d]/20"
+          className="h-9 max-w-[380px] rounded-md border-white/8 bg-[#171b1e] text-center text-sm font-semibold text-[#f6f7ef] placeholder:text-white/40 focus-visible:border-[#9cff6d]/60 focus-visible:ring-[#9cff6d]/20"
           aria-label="Nombre del diseno"
         />
       </div>
 
       <div className="flex items-center gap-2">
-        <Button className="hidden border border-[#9cff6d]/20 bg-[#9cff6d]/10 text-[#d8ffba] hover:bg-[#9cff6d]/16 md:inline-flex" size="sm">
-          Sube de categoria
-        </Button>
+        <div className="editor-theme-switcher flex items-center rounded-lg border border-white/10 bg-white/5 p-1" aria-label="Tema del editor">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            className={theme === "light" ? "bg-white text-slate-900 hover:bg-white" : "text-slate-400"}
+            aria-label="Usar tema claro"
+            aria-pressed={theme === "light"}
+            onClick={() => onThemeChange("light")}
+          >
+            <Sun />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            className={theme === "dark" ? "bg-slate-700 text-white hover:bg-slate-700" : "text-slate-400"}
+            aria-label="Usar tema oscuro"
+            aria-pressed={theme === "dark"}
+            onClick={() => onThemeChange("dark")}
+          >
+            <Moon />
+          </Button>
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -110,14 +122,6 @@ export function EditorTopBar({
           </TooltipTrigger>
           <TooltipContent>Comentarios</TooltipContent>
         </Tooltip>
-        <Button
-          className="bg-[#dfffcf] text-[#09100d] shadow-[0_10px_24px_rgba(156,255,109,0.18)] hover:bg-[#c8ffad]"
-          onClick={onShare}
-          disabled={!canShare}
-        >
-          <Share2 data-icon="inline-start" />
-          Compartir
-        </Button>
       </div>
     </header>
   )
@@ -135,7 +139,7 @@ export function EditorToolRail<TToolId extends string>({
   tools,
 }: EditorToolRailProps<TToolId>) {
   return (
-    <aside className="relative z-20 border-r border-white/8 bg-[#0b0e10] py-3 shadow-[10px_0_34px_rgba(0,0,0,0.2)]">
+    <aside className="editor-toolrail relative z-20 border-r border-white/8 bg-[#0b0e10] py-3">
       <nav className="flex flex-col items-center gap-1 px-2">
         {tools.map((tool) => {
           const Icon = tool.icon
@@ -145,10 +149,11 @@ export function EditorToolRail<TToolId extends string>({
             <button
               key={tool.id}
               type="button"
+              data-active={isActive}
               className={cn(
                 "group relative flex h-[72px] w-full flex-col items-center justify-center gap-1 rounded-md px-1 text-[10.5px] font-bold transition",
                 isActive
-                  ? "bg-[#171d1c] text-white shadow-[inset_3px_0_0_#9cff6d]"
+                  ? "bg-[#171d1c] text-white"
                   : "text-[#87928e] hover:bg-[#121719] hover:text-[#f6f7ef]",
               )}
               onClick={() => onSelectTool(tool.id)}
@@ -178,7 +183,7 @@ type EditorContextSidebarProps = {
 
 export function EditorContextSidebar({ badgeLabel, children, title }: EditorContextSidebarProps) {
   return (
-    <aside className="hidden overflow-y-auto border-r border-white/8 bg-[#121619] p-4 shadow-[18px_0_46px_rgba(0,0,0,0.26)] lg:block">
+    <aside className="editor-context-sidebar hidden overflow-y-auto border-r border-white/8 bg-[#121619] p-4 lg:block">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9cff6d]">Panel</p>
@@ -211,8 +216,8 @@ export function EditorWorkspace({
   viewportRef,
 }: EditorWorkspaceProps) {
   return (
-    <section className="flex min-w-0 flex-col bg-[#0d1012]">
-      <div className="flex h-12 items-center justify-between border-b border-white/8 bg-[#101417] px-4">
+    <section className="editor-workspace flex min-w-0 flex-col bg-[#0d1012]">
+      <div className="editor-workspace-toolbar flex h-12 items-center justify-between border-b border-white/8 bg-[#101417] px-4">
         <div className="flex min-w-0 items-center gap-3 text-xs font-semibold text-[#8e9995]">
           {stats.map((stat) => (
             <span key={stat} className="whitespace-nowrap">{stat}</span>
@@ -226,7 +231,7 @@ export function EditorWorkspace({
 
       <div
         ref={viewportRef}
-        className="relative flex flex-1 justify-center overflow-auto bg-[radial-gradient(circle_at_30%_0%,rgba(156,255,109,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.025)_0_1px,transparent_1px)] bg-[length:auto,24px_24px] px-4 py-8"
+        className="editor-canvas-viewport relative flex flex-1 justify-start overflow-auto bg-[radial-gradient(circle_at_30%_0%,rgba(156,255,109,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.025)_0_1px,transparent_1px)] bg-[length:auto,24px_24px] px-4 py-8"
       >
         {children}
       </div>
@@ -242,15 +247,8 @@ type EditorFooterProps = {
 
 export function EditorFooter({ activePageLabel, zoomLabel }: EditorFooterProps) {
   return (
-    <footer className="flex h-14 items-center justify-between border-t border-white/8 bg-[#101417] px-5 text-sm font-bold text-[#8e9995]">
-      <div className="flex items-center gap-5">
-        <span>Notas</span>
-        <span>Temporizador</span>
-      </div>
+    <footer className="editor-workspace-footer flex h-14 items-center justify-end border-t border-white/8 bg-[#101417] px-5 text-sm font-bold text-[#8e9995]">
       <div className="flex items-center gap-4">
-        <div className="hidden h-1 w-44 rounded-full bg-white/12 md:block">
-          <div className="h-full w-[61%] rounded-full bg-[#9cff6d]" />
-        </div>
         <span>{zoomLabel}</span>
         <span>Paginas</span>
         <span>{activePageLabel}</span>

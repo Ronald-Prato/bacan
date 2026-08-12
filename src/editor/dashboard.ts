@@ -1,33 +1,35 @@
-import type { LibraryAsset } from "./assets"
 import type { SavedProject } from "./projects"
-import type { SharedTemplateSummary } from "./templates"
-
-export type WorkspaceStats = {
-  projectCount: number
-  assetCount: number
-  templateCount: number
-  totalPageCount: number
-}
 
 export function listRecentProjects(projects: SavedProject[], limit = 6): SavedProject[] {
   return [...projects].sort((first, second) => second.updatedAt - first.updatedAt).slice(0, limit)
 }
 
-export function createWorkspaceStats({
-  projects,
-  assets,
-  sharedTemplates,
-  builtInTemplateCount,
-}: {
-  projects: SavedProject[]
-  assets: LibraryAsset[]
-  sharedTemplates: SharedTemplateSummary[]
-  builtInTemplateCount: number
-}): WorkspaceStats {
-  return {
-    projectCount: projects.length,
-    assetCount: assets.length,
-    templateCount: builtInTemplateCount + sharedTemplates.length,
-    totalPageCount: projects.reduce((count, project) => count + project.pageCount, 0),
+export function formatRecentProjectUpdate(updatedAt: number, now = Date.now()): string {
+  const elapsed = Math.max(0, now - updatedAt)
+  const elapsedMinutes = Math.floor(elapsed / 60_000)
+  const elapsedHours = Math.floor(elapsed / 3_600_000)
+  const elapsedDays = Math.floor(elapsed / 86_400_000)
+
+  if (elapsedMinutes < 1) {
+    return "Editado ahora"
   }
+
+  if (elapsedHours < 1) {
+    return `Editado hace ${elapsedMinutes} ${elapsedMinutes === 1 ? "minuto" : "minutos"}`
+  }
+
+  if (elapsedDays < 1) {
+    return `Editado hace ${elapsedHours} ${elapsedHours === 1 ? "hora" : "horas"}`
+  }
+
+  if (elapsedDays < 7) {
+    return `Editado hace ${elapsedDays} ${elapsedDays === 1 ? "día" : "días"}`
+  }
+
+  return `Editado el ${new Intl.DateTimeFormat("es-CO", {
+    day: "numeric",
+    month: "short",
+  })
+    .format(updatedAt)
+    .replace(".", "")}`
 }

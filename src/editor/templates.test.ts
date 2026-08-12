@@ -5,10 +5,12 @@ import {
   DESIGN_FORMATS,
   DESIGN_TEMPLATES,
   createBlankDocumentForFormat,
+  createBlankDocumentForSize,
   createDocumentFromTemplate,
   createDocumentFromSharedTemplate,
   createSharedTemplateDraft,
   resizeDocumentToFormat,
+  resolveCustomDesignSize,
 } from "./templates"
 
 function idSequence() {
@@ -36,6 +38,40 @@ describe("design templates and formats", () => {
     expect(document.name).toBe("Historia vertical")
     expect(document.size).toEqual({ width: 1080, height: 1920 })
     expect(document.pages).toHaveLength(1)
+    expect(document.pages[0].elements).toHaveLength(0)
+  })
+
+  it("converts centimetres to whole pixels at the requested print resolution", () => {
+    expect(resolveCustomDesignSize({ width: 21, height: 29.7, unit: "cm", dpi: 300 })).toEqual({
+      width: 2480,
+      height: 3508,
+    })
+  })
+
+  it("keeps pixel dimensions exact and independent from print resolution", () => {
+    expect(resolveCustomDesignSize({ width: 1200, height: 628, unit: "px", dpi: 300 })).toEqual({
+      width: 1200,
+      height: 628,
+    })
+  })
+
+  it("rejects invalid or unsafe custom canvas dimensions", () => {
+    expect(() => resolveCustomDesignSize({ width: 0, height: 200, unit: "px", dpi: 96 })).toThrow(
+      "mayores que cero",
+    )
+    expect(() => resolveCustomDesignSize({ width: 20000, height: 200, unit: "px", dpi: 96 })).toThrow(
+      "16384",
+    )
+  })
+
+  it("creates a blank custom document with the resolved pixel size", () => {
+    const document = createBlankDocumentForSize(
+      { width: 10, height: 15, unit: "cm", dpi: 300 },
+      idSequence(),
+    )
+
+    expect(document.name).toBe("Diseño 1181 × 1772 px")
+    expect(document.size).toEqual({ width: 1181, height: 1772 })
     expect(document.pages[0].elements).toHaveLength(0)
   })
 

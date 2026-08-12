@@ -9,6 +9,13 @@ import {
 } from "./document"
 
 export type DesignFormatId = "square-post" | "story" | "presentation" | "poster"
+export type CustomDesignUnit = "px" | "cm"
+export type CustomDesignSize = {
+  width: number
+  height: number
+  unit: CustomDesignUnit
+  dpi: number
+}
 export type DesignTemplateId = "launch-post" | "story-announcement" | "pitch-deck"
 
 export type DesignFormat = {
@@ -68,6 +75,34 @@ export const DESIGN_FORMATS: DesignFormat[] = [
   },
 ]
 
+export const MAX_CANVAS_DIMENSION = 16_384
+
+export function resolveCustomDesignSize(input: CustomDesignSize): DocumentSize {
+  if (!Number.isFinite(input.width) || !Number.isFinite(input.height) || input.width <= 0 || input.height <= 0) {
+    throw new Error("El ancho y el alto deben ser mayores que cero.")
+  }
+
+  if (input.unit === "cm" && (!Number.isFinite(input.dpi) || input.dpi < 72 || input.dpi > 600)) {
+    throw new Error("La resolución debe estar entre 72 y 600 ppp.")
+  }
+
+  const pixelsPerUnit = input.unit === "cm" ? input.dpi / 2.54 : 1
+  const size = {
+    width: Math.round(input.width * pixelsPerUnit),
+    height: Math.round(input.height * pixelsPerUnit),
+  }
+
+  if (size.width < 1 || size.height < 1) {
+    throw new Error("El tamaño debe producir al menos un píxel por lado.")
+  }
+
+  if (size.width > MAX_CANVAS_DIMENSION || size.height > MAX_CANVAS_DIMENSION) {
+    throw new Error(`Cada lado debe tener como máximo ${MAX_CANVAS_DIMENSION} px.`)
+  }
+
+  return size
+}
+
 export const DESIGN_TEMPLATES: DesignTemplate[] = [
   {
     id: "launch-post",
@@ -113,6 +148,20 @@ export function createBlankDocumentForFormat(
     ...document,
     name: format.name,
     size: format.size,
+  }
+}
+
+export function createBlankDocumentForSize(
+  input: CustomDesignSize,
+  createId: IdFactory,
+): EditorDocument {
+  const size = resolveCustomDesignSize(input)
+  const document = createInitialDocument(createId)
+
+  return {
+    ...document,
+    name: `Diseño ${size.width} × ${size.height} px`,
+    size,
   }
 }
 

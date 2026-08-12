@@ -26,7 +26,8 @@ surface grows.
 5. Keep external systems behind adapters. The canvas editor should accept
    injected persistence or service contracts instead of importing backend calls
    deep inside canvas logic.
-6. Run `pnpm test`, `pnpm lint`, and `pnpm build` before each feature commit.
+6. Run `bun run test`, `bun run lint`, and `bun run build` before each feature
+   commit.
 7. Commit with a clear message and push `main` after the feature is tested.
 
 ## Code Boundaries

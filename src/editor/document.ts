@@ -226,7 +226,7 @@ export function createTextElement(
     id: createId(),
     type: "text",
     name: "Texto",
-    text: "Doble click para editar",
+    text: "Text",
     x: Math.round((canvasSize.width - width) / 2),
     y: Math.round((canvasSize.height - height) / 2),
     width,
@@ -356,6 +356,22 @@ export function insertPageAfter(
       })),
     },
     pageId: nextPage.id,
+  }
+}
+
+export function deletePage(document: EditorDocument, pageId: string): EditorDocument {
+  if (document.pages.length <= 1 || !document.pages.some((page) => page.id === pageId)) {
+    return document
+  }
+
+  return {
+    ...document,
+    pages: document.pages
+      .filter((page) => page.id !== pageId)
+      .map((page, index) => ({
+        ...page,
+        name: `Pagina ${index + 1}`,
+      })),
   }
 }
 
@@ -715,6 +731,26 @@ export function toggleElementSelection(
 
 export function pageElementCount(document: EditorDocument, pageId: string): number {
   return document.pages.find((page) => page.id === pageId)?.elements.length ?? 0
+}
+
+export function getElementLayerPosition(
+  document: EditorDocument,
+  pageId: string,
+  elementId: string,
+): { index: number; count: number; isBack: boolean; isFront: boolean } | null {
+  const page = document.pages.find((candidate) => candidate.id === pageId)
+  const index = page?.elements.findIndex((element) => element.id === elementId) ?? -1
+
+  if (!page || index < 0) {
+    return null
+  }
+
+  return {
+    index,
+    count: page.elements.length,
+    isBack: index === 0,
+    isFront: index === page.elements.length - 1,
+  }
 }
 
 export function moveElementForward(
