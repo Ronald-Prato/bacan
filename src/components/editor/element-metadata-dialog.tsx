@@ -26,7 +26,9 @@ export function ElementMetadataDialog({
   useEffect(() => {
     fieldRef.current?.focus()
     fieldRef.current?.select()
+  }, [])
 
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onCancel()
