@@ -123,6 +123,10 @@ const pt: Record<MessageKey, string> = {
 const messages: Record<Locale, Record<MessageKey, string>> = { en, es, pt }
 
 const interfaceTranslations: Record<string, { en: string; pt: string }> = {
+  "Nueva versión disponible": { en: "New version available", pt: "Nova versão disponível" },
+  "Actualiza para usar la última versión de Bacan.": { en: "Update to use the latest version of Bacan.", pt: "Atualize para usar a versão mais recente do Bacan." },
+  "Ocultar aviso de nueva versión": { en: "Dismiss new version notice", pt: "Ocultar aviso de nova versão" },
+  "Actualizar": { en: "Update", pt: "Atualizar" },
   "Accede a tu espacio": { en: "Sign in to your workspace", pt: "Acesse seu espaço" },
   "Tus diseños, recursos y versiones quedan protegidos y vinculados a tu cuenta.": { en: "Your designs, assets, and versions stay protected and linked to your account.", pt: "Seus designs, recursos e versões ficam protegidos e vinculados à sua conta." },
   "Continuar con Google": { en: "Continue with Google", pt: "Continuar com o Google" },
