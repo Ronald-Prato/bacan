@@ -62,6 +62,7 @@ describe("context menu action model", () => {
 
     expect(Object.keys(actions)).toEqual([
       "copy",
+      "paste",
       "duplicate",
       "delete",
       "align",
@@ -90,6 +91,13 @@ describe("context menu action model", () => {
       reason: "capability-unavailable",
     })
     expect(actions["alt-text"]).toMatchObject({ state: "hidden", visible: false, enabled: false })
+    expect(actions.paste).toMatchObject({
+      source: "local",
+      state: "disabled",
+      visible: true,
+      enabled: false,
+      reason: "clipboard-empty",
+    })
   })
 
   it("enables text-only optional actions only for text elements", () => {
@@ -117,6 +125,7 @@ describe("context menu action model", () => {
     expect(textActions["magic-text"]).toMatchObject({ state: "available", visible: true, enabled: true })
     expect(textActions.translate).toMatchObject({ state: "available", visible: true, enabled: true })
     expect(textActions["alt-text"]).toMatchObject({ state: "hidden", visible: false, enabled: false })
+    expect(shapeActions["alt-text"]).toMatchObject({ state: "available", visible: true, enabled: true })
     expect(shapeActions["magic-text"]).toMatchObject({ state: "hidden", visible: false, enabled: false })
     expect(shapeActions.translate).toMatchObject({ state: "hidden", visible: false, enabled: false })
     expect(shapeActions["create-component"]).toMatchObject({ state: "available", visible: true, enabled: true })
@@ -134,10 +143,18 @@ describe("context menu action model", () => {
         document,
         selection: { pageId, elementId: image.id },
         capabilities: { "alt-text": true, link: true },
+        hasClipboardElements: false,
       }),
     )
 
     expect(actions["alt-text"]).toMatchObject({ state: "available", visible: true, enabled: true })
+    expect(actions.paste).toMatchObject({
+      source: "local",
+      state: "disabled",
+      visible: true,
+      enabled: false,
+      reason: "clipboard-empty",
+    })
     expect(actions.link).toMatchObject({ state: "available", visible: true, enabled: true })
     expect(actions.comment).toMatchObject({
       state: "disabled",
@@ -147,6 +164,21 @@ describe("context menu action model", () => {
     })
     expect(actions["magic-text"]).toMatchObject({ state: "hidden", visible: false, enabled: false })
     expect(actions.translate).toMatchObject({ state: "hidden", visible: false, enabled: false })
+
+    const actionsWithClipboard = actionMap(
+      getContextMenuActions({
+        document,
+        selection: { pageId, elementId: image.id },
+        hasClipboardElements: true,
+      }),
+    )
+
+    expect(actionsWithClipboard.paste).toMatchObject({
+      source: "local",
+      state: "available",
+      visible: true,
+      enabled: true,
+    })
   })
 
   it("keeps local actions available for multiple selection and narrows target-specific options", () => {

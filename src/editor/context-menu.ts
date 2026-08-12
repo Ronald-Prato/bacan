@@ -1,6 +1,6 @@
 import { findSelectedElements, type CanvasElement, type EditorDocument, type Selection } from "./document"
 
-export const LOCAL_CONTEXT_MENU_ACTION_IDS = ["copy", "duplicate", "delete", "align", "lock"] as const
+export const LOCAL_CONTEXT_MENU_ACTION_IDS = ["copy", "paste", "duplicate", "delete", "align", "lock"] as const
 
 export const OPTIONAL_CONTEXT_MENU_ACTION_IDS = [
   "comment",
@@ -22,7 +22,11 @@ export type OptionalContextMenuActionId = (typeof OPTIONAL_CONTEXT_MENU_ACTION_I
 export type ContextMenuActionId = (typeof CONTEXT_MENU_ACTION_IDS)[number]
 export type ContextMenuActionSource = "local" | "optional"
 export type ContextMenuActionState = "available" | "disabled" | "hidden"
-export type ContextMenuActionReason = "no-selection" | "unsupported-selection" | "capability-unavailable"
+export type ContextMenuActionReason =
+  | "no-selection"
+  | "unsupported-selection"
+  | "capability-unavailable"
+  | "clipboard-empty"
 export type ContextMenuCapability = OptionalContextMenuActionId
 
 export type ContextMenuCapabilities = Partial<Record<ContextMenuCapability, boolean>>
@@ -40,6 +44,7 @@ export type ContextMenuRequest = {
   document: EditorDocument
   selection: Selection
   capabilities?: ContextMenuCapabilities
+  hasClipboardElements?: boolean
 }
 
 type OptionalActionRule = {
@@ -62,7 +67,9 @@ const OPTIONAL_ACTION_RULES: Record<OptionalContextMenuActionId, OptionalActionR
   },
   "alt-text": {
     capability: "alt-text",
-    matches: (elements) => elements.length === 1 && elements.every((element) => element.type === "image"),
+    matches: (elements) =>
+      elements.length === 1 &&
+      elements.every((element) => element.type === "image" || element.type === "shape"),
   },
   "magic-text": {
     capability: "magic-text",
@@ -82,6 +89,7 @@ export function getContextMenuActions({
   document,
   selection,
   capabilities = {},
+  hasClipboardElements = false,
 }: ContextMenuRequest): ContextMenuAction[] {
   const selectedElements = findSelectedElements(document, selection)
 
@@ -91,6 +99,10 @@ export function getContextMenuActions({
     }
 
     if (isLocalContextMenuAction(id)) {
+      if (id === "paste" && !hasClipboardElements) {
+        return createAction(id, "disabled", "clipboard-empty")
+      }
+
       return createAction(id, "available")
     }
 
