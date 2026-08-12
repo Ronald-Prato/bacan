@@ -120,6 +120,23 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-color: color-mix(in srgb, currentColor 35%, transparent) transparent;
+    scrollbar-width: thin;
+    }
+  *::-webkit-scrollbar {
+    width: 0.5rem;
+    height: 0.5rem;
+    background: transparent;
+    }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+    }
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, currentColor 35%, transparent);
+    background-clip: padding-box;
     }
   body {
     @apply bg-background text-foreground;
@@ -213,6 +230,35 @@
   scrollbar-width: thin;
 }
 
+.editor-inline-text-editor {
+  --inline-text-editor-accent: #9cff6d;
+  --inline-text-editor-surface: color-mix(in srgb, var(--inline-text-editor-accent) 14%, transparent);
+  --inline-text-editor-border: color-mix(in srgb, var(--inline-text-editor-accent) 84%, transparent);
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  margin: 0;
+  border: 1px solid var(--inline-text-editor-border);
+  border-radius: var(--radius-sm);
+  outline: 2px solid color-mix(in srgb, var(--inline-text-editor-accent) 36%, transparent);
+  outline-offset: 2px;
+  background: var(--inline-text-editor-surface);
+  padding: 0;
+  overflow: hidden;
+  caret-color: currentColor;
+  resize: none;
+}
+
+.editor-inline-text-editor:focus-visible {
+  outline-color: var(--inline-text-editor-accent);
+}
+
+.editor-theme-light .editor-inline-text-editor {
+  --inline-text-editor-accent: var(--vacan-accent);
+  --inline-text-editor-surface: color-mix(in srgb, var(--vacan-accent) 18%, transparent);
+  --inline-text-editor-border: var(--vacan-accent);
+}
+
 .editor-font-list::-webkit-scrollbar-track,
 .editor-font-list::-webkit-scrollbar-corner {
   background: transparent;
@@ -250,7 +296,38 @@
   opacity: 1;
 }
 
+.editor-background-color-strip,
+.editor-background-recents {
+  scrollbar-width: none;
+}
+
+.editor-background-color-strip::-webkit-scrollbar,
+.editor-background-recents::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-theme-light .editor-background-color-trigger,
+.editor-theme-light .editor-background-empty {
+  color: var(--vacan-foreground) !important;
+  background: color-mix(in srgb, var(--vacan-foreground) 7%, var(--vacan-background)) !important;
+  border-color: color-mix(in srgb, var(--vacan-foreground) 22%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-background-section-title {
+  color: var(--vacan-foreground) !important;
+}
+
+.editor-theme-light .editor-background-thumbnail {
+  background: color-mix(in srgb, var(--vacan-foreground) 7%, var(--vacan-background)) !important;
+  border-color: color-mix(in srgb, var(--vacan-foreground) 16%, var(--vacan-background)) !important;
+}
+
+.editor-theme-light .editor-background-thumbnail[aria-pressed="true"] {
+  border-color: var(--vacan-accent) !important;
+}
+
 .editor-theme-light .editor-custom-background-color,
+.editor-theme-light .editor-custom-element-color,
 .editor-theme-light .editor-background-palette {
   color: var(--vacan-foreground) !important;
   background: color-mix(in srgb, var(--vacan-foreground) 7%, var(--vacan-background)) !important;
@@ -331,6 +408,11 @@
   background: color-mix(in srgb, var(--vacan-accent) 32%, var(--vacan-background)) !important;
 }
 
+.editor-context-sidebar,
+.editor-theme-light .editor-context-sidebar {
+  background: transparent !important;
+}
+
 .editor-theme-light .editor-add-page {
   color: var(--vacan-background) !important;
   background: var(--vacan-foreground) !important;
@@ -338,6 +420,180 @@
 }
 
 .editor-theme-light :is(button, input, textarea, select):focus-visible {
+  border-color: var(--vacan-accent) !important;
+  outline-color: var(--vacan-accent) !important;
+}
+
+.editor-layers-panel {
+  --layer-accent: #9cff6d;
+  --layer-border: color-mix(in srgb, currentColor 16%, transparent);
+  --layer-surface: color-mix(in srgb, currentColor 7%, transparent);
+  --layer-surface-selected: color-mix(in srgb, var(--layer-accent) 12%, transparent);
+  --layer-muted: color-mix(in srgb, currentColor 62%, transparent);
+  color: inherit;
+}
+
+.editor-theme-light .editor-layers-panel {
+  --layer-accent: var(--vacan-accent);
+  --layer-border: color-mix(in srgb, var(--vacan-foreground) 24%, var(--vacan-background));
+  --layer-surface: color-mix(in srgb, var(--vacan-foreground) 7%, var(--vacan-background));
+  --layer-surface-selected: color-mix(in srgb, var(--vacan-accent) 18%, var(--vacan-background));
+  --layer-muted: color-mix(in srgb, var(--vacan-foreground) 72%, var(--vacan-background));
+}
+
+.editor-layers-panel__hint {
+  margin: 0 0 0.5rem;
+  color: var(--layer-muted);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.editor-layers-panel__list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.editor-layers-panel__empty {
+  border: 1px solid var(--layer-border, color-mix(in srgb, currentColor 16%, transparent));
+  border-radius: var(--radius-md);
+  background: var(--layer-surface, color-mix(in srgb, currentColor 7%, transparent));
+  padding: 1rem;
+  color: var(--layer-muted, color-mix(in srgb, currentColor 62%, transparent));
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.editor-theme-light .editor-layers-panel__empty {
+  --layer-border: color-mix(in srgb, var(--vacan-foreground) 24%, var(--vacan-background));
+  --layer-surface: color-mix(in srgb, var(--vacan-foreground) 7%, var(--vacan-background));
+  --layer-muted: color-mix(in srgb, var(--vacan-foreground) 72%, var(--vacan-background));
+}
+
+.editor-layer-row {
+  position: relative;
+  overflow: visible;
+  border: 1px solid var(--layer-border);
+  border-radius: var(--radius-md);
+  background: var(--layer-surface);
+  transform-origin: center;
+  will-change: transform;
+  transition: border-color 120ms ease, background-color 120ms ease, opacity 120ms ease;
+}
+
+.editor-layer-row[data-selected="true"] {
+  border-color: var(--layer-accent);
+  background: var(--layer-surface-selected);
+}
+
+.editor-layer-row[data-dragging="true"] {
+  border-color: var(--layer-accent);
+  background: var(--layer-surface-selected);
+  opacity: 0.58;
+}
+
+.editor-layer-row__main {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem;
+}
+
+.editor-layer-row__drag-handle {
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--layer-muted);
+  outline: none;
+  cursor: grab;
+}
+
+.editor-layer-row__drag-handle:hover {
+  color: inherit;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.editor-layer-row__drag-handle:active {
+  cursor: grabbing;
+}
+
+.editor-layer-row__drag-handle:focus-visible {
+  border-color: var(--layer-accent);
+  outline: 2px solid var(--layer-accent);
+  outline-offset: -2px;
+}
+
+.editor-layer-row__drag-handle[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.editor-layer-row__drag-handle svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.editor-layer-row__select {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  padding: 0.25rem;
+  text-align: left;
+  outline: none;
+}
+
+.editor-layer-row__select:focus-visible {
+  outline: 2px solid var(--layer-accent);
+  outline-offset: -2px;
+}
+
+.editor-layer-row__name,
+.editor-layer-row__meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-layer-row__name {
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.125rem;
+}
+
+.editor-layer-row__meta {
+  color: var(--layer-muted);
+  font-size: 0.6875rem;
+  line-height: 0.875rem;
+}
+
+.editor-layer-row__position-actions {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.125rem;
+  border-top: 1px solid var(--layer-border);
+  padding: 0.25rem 0.375rem;
+}
+
+.editor-layer-row__position-actions > span {
+  margin-right: auto;
+  color: var(--layer-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.editor-theme-light .editor-layer-row :is(button, [role="button"]):focus-visible {
   border-color: var(--vacan-accent) !important;
   outline-color: var(--vacan-accent) !important;
 }
@@ -420,6 +676,108 @@
   --canvas-menu-focus: var(--vacan-accent);
   --canvas-menu-premium: var(--vacan-accent);
   --canvas-menu-danger: color-mix(in srgb, var(--vacan-foreground) 92%, black);
+}
+
+.text-library,
+.text-library__primary-action,
+.text-library__card,
+.text-library__basic-button {
+  box-sizing: border-box;
+}
+
+.text-library {
+  --text-library-background: var(--background);
+  --text-library-foreground: var(--foreground);
+  --text-library-accent: #9cff6d;
+  --text-library-accent-foreground: #09100d;
+  --text-library-surface: color-mix(in srgb, currentColor 8%, var(--text-library-background));
+  --text-library-hover: color-mix(in srgb, var(--text-library-accent) 14%, var(--text-library-background));
+  --text-library-preview: color-mix(in srgb, white 92%, var(--text-library-background));
+  --text-library-border: color-mix(in srgb, currentColor 22%, transparent);
+  --text-library-muted: color-mix(in srgb, currentColor 68%, transparent);
+  display: flex; min-height: 0; min-width: 0; flex-direction: column; overflow: visible;
+  background: transparent; color: var(--text-library-foreground);
+  font-size: 0.8125rem; line-height: 1.25rem;
+}
+
+.editor-theme-light .text-library {
+  --text-library-background: var(--vacan-background);
+  --text-library-foreground: var(--vacan-foreground);
+  --text-library-accent: var(--vacan-accent);
+  --text-library-accent-foreground: color-mix(in srgb, var(--vacan-foreground) 88%, black);
+  --text-library-surface: color-mix(in srgb, var(--vacan-foreground) 7%, var(--vacan-background));
+  --text-library-hover: color-mix(in srgb, var(--vacan-accent) 15%, var(--vacan-background));
+  --text-library-preview: color-mix(in srgb, white 45%, var(--vacan-background));
+  --text-library-border: color-mix(in srgb, var(--vacan-foreground) 24%, var(--vacan-background));
+  --text-library-muted: color-mix(in srgb, var(--vacan-foreground) 72%, var(--vacan-background));
+}
+
+.text-library__header { display: grid; flex: 0 0 auto; gap: 0.5rem; padding: 0.125rem 0 0.875rem; }
+.text-library__primary-action:focus-visible,
+.text-library__card:focus-visible,
+.text-library__basic-button:focus-visible {
+  border-color: var(--text-library-accent); outline: 2px solid var(--text-library-accent); outline-offset: 1px;
+}
+.text-library__hint { margin: 0; color: var(--text-library-muted); font-size: 0.6875rem; line-height: 1rem; }
+
+.text-library__primary-action {
+  display: inline-flex; min-height: 2.625rem; align-items: center; justify-content: center; gap: 0.5rem;
+  border: 1px solid var(--text-library-accent); border-radius: var(--radius-md);
+  background: var(--text-library-accent); color: var(--text-library-accent-foreground);
+  padding: 0.625rem 0.75rem; font: inherit; font-weight: 700; line-height: 1.125rem; outline: none;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.text-library__primary-action:hover { background: color-mix(in srgb, var(--text-library-accent) 84%, var(--text-library-background)); }
+.text-library__primary-action svg { width: 1rem; height: 1rem; flex: 0 0 auto; }
+.text-library__catalog {
+  min-height: 0; overflow: visible;
+  padding: 0.125rem 0.125rem 1rem 0;
+}
+
+.text-library__section,
+.text-library__quick-section { display: grid; gap: 0.625rem; }
+.text-library__section + .text-library__section,
+.text-library__quick-section + .text-library__section {
+  margin-top: 1.125rem; padding-top: 1rem; border-top: 1px solid var(--text-library-border);
+}
+.text-library__quick-section h2,
+.text-library__section h2 { margin: 0; color: inherit; font-size: 0.8125rem; font-weight: 700; line-height: 1.125rem; }
+
+.text-library__grid,
+.text-library__basic-grid { display: grid; gap: 0.5rem; }
+.text-library__grid,
+.text-library__basic-grid { grid-template-columns: minmax(0, 1fr); }
+
+.text-library__card,
+.text-library__basic-button {
+  min-width: 0; border: 1px solid transparent; border-radius: var(--radius-md);
+  background: transparent; color: inherit; cursor: grab; outline: none;
+  transition: border-color 120ms ease;
+}
+.text-library__card,
+.text-library__basic-button { display: block; min-height: 4.5rem; padding: 0; text-align: left; }
+.text-library__card:hover,
+.text-library__basic-button:hover { border-color: var(--text-library-accent); }
+.text-library__card:active,
+.text-library__basic-button:active { cursor: grabbing; }
+
+.text-library__card-preview {
+  display: flex; min-height: 4.5rem; flex-direction: column; justify-content: center; gap: 0.125rem;
+  overflow: hidden; border-radius: var(--radius-md); background: var(--text-library-preview); padding: 0.625rem;
+}
+.text-library__preview-layer,
+.text-library__basic-preview { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.text-library__basic-preview {
+  display: flex; min-height: 4.5rem; align-items: center; justify-content: center; border-radius: var(--radius-md);
+  background: var(--text-library-preview); padding: 0.625rem;
+}
+
+.text-library button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+@media (prefers-reduced-motion: reduce) {
+  .text-library__primary-action,
+  .text-library__card,
+  .text-library__basic-button { transition-duration: 1ms; }
 }
 
 .editor-canvas-context-menu__surface {

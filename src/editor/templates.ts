@@ -6,6 +6,7 @@ import {
   type EditorDocument,
   type IdFactory,
   type Page,
+  type ShapeType,
 } from "./document"
 
 export type DesignFormatId = "square-post" | "story" | "presentation" | "poster"
@@ -264,7 +265,7 @@ function createTemplatePage(
       name: "Pagina 1",
       background: "#042f2e",
       elements: [
-        shape(createId, "circle", "Sello", size.width * 0.1, size.height * 0.1, size.width * 0.34, size.width * 0.34, "#14b8a6"),
+        shape(createId, "basic-circle", "Sello", size.width * 0.1, size.height * 0.1, size.width * 0.34, size.width * 0.34, "#14b8a6"),
         text(createId, "Titulo", "Oferta especial", size.width * 0.1, size.height * 0.35, size.width * 0.78, 220, 92, "#ffffff"),
         text(createId, "Detalle", "Disponible por tiempo limitado", size.width * 0.1, size.height * 0.5, size.width * 0.72, 160, 42, "#ccfbf1"),
       ],
@@ -277,7 +278,7 @@ function createTemplatePage(
       name: "Pagina 1",
       background: "#fff7ed",
       elements: [
-        shape(createId, "rect", "Bloque", size.width * 0.08, size.height * 0.16, size.width * 0.34, size.height * 0.58, "#f59e0b"),
+        shape(createId, "basic-square", "Bloque", size.width * 0.08, size.height * 0.16, size.width * 0.34, size.height * 0.58, "#f59e0b"),
         text(createId, "Titulo", "Nueva oportunidad", size.width * 0.48, size.height * 0.24, size.width * 0.42, 190, 72, "#111827"),
         text(createId, "Subtitulo", "Una propuesta clara para empezar rapido.", size.width * 0.48, size.height * 0.48, size.width * 0.38, 120, 34, "#475569"),
       ],
@@ -289,8 +290,8 @@ function createTemplatePage(
     name: "Pagina 1",
     background: "#101827",
     elements: [
-      shape(createId, "rect", "Fondo acento", 96, 96, 888, 888, "#00c4cc"),
-      shape(createId, "circle", "Decoracion", 680, 92, 280, 280, "#7c3aed"),
+      shape(createId, "basic-square", "Fondo acento", 96, 96, 888, 888, "#00c4cc"),
+      shape(createId, "basic-circle", "Decoracion", 680, 92, 280, 280, "#7c3aed"),
       text(createId, "Titulo", "Lanza algo nuevo", 150, 230, 760, 250, 86, "#ffffff"),
       text(createId, "Subtitulo", "Cambia este texto y publica en minutos.", 150, 520, 690, 150, 38, "#dbeafe"),
     ],
@@ -313,7 +314,7 @@ function cloneEditorDocument(document: EditorDocument): EditorDocument {
 
 function shape(
   createId: IdFactory,
-  shapeType: "rect" | "circle" | "triangle",
+  shapeType: ShapeType,
   name: string,
   x: number,
   y: number,
@@ -336,6 +337,8 @@ function shape(
     visible: true,
     fill,
     stroke: "transparent",
+    strokeWidth: 0,
+    cornerRadius: 0,
   }
 }
 

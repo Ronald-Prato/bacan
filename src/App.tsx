@@ -16,15 +16,15 @@ import {
   Accessibility,
   BringToFront,
   ChevronDown,
-  Circle,
+  ChevronsDown,
+  ChevronsUp,
+  ChevronUp,
   Clock,
   CloudUpload,
   ClipboardPaste,
   Copy,
   CopyPlus,
   Download,
-  Eye,
-  EyeOff,
   Image as ImageIcon,
   Layers3,
   Languages,
@@ -39,9 +39,7 @@ import {
   Share2,
   Shapes,
   SquarePlus,
-  Square,
   Trash2,
-  Triangle,
   Type,
   Redo2,
   Undo2,
@@ -49,23 +47,23 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import {
-  Circle as KonvaCircle,
+  Arrow as KonvaArrow,
   Group as KonvaGroup,
   Image as KonvaImage,
   Layer as KonvaLayer,
   Line,
+  Path as KonvaPath,
   Rect,
   RegularPolygon,
   Stage,
+  Star as KonvaStar,
   Text,
   Transformer,
 } from "react-konva"
 
 import {
   CANVAS_SIZE,
-  DEFAULT_SHAPE_SIZE,
   FONT_OPTIONS,
-  SHAPE_OPTIONS,
   addElementToPage,
   alignElementToCanvas,
   createMultiSelection,
@@ -85,6 +83,8 @@ import {
   duplicateElementBehind,
   findElement,
   findSelectedElements,
+  getShapeElementDefaultSize,
+  getElementLayerPosition,
   getSelectionElementIds,
   groupElements,
   insertPageAfter,
@@ -93,8 +93,12 @@ import {
   moveElementForward,
   moveElementToBack,
   moveElementToFront,
+  moveElementToLayerIndex,
   normalizeImageElement,
+  normalizeShapeElement,
   normalizeTextElement,
+  setPageBackgroundColor,
+  setPageBackgroundImage,
   selectionIncludesElement,
   setElementsLocked,
   toggleElementLocked,
@@ -104,6 +108,7 @@ import {
   updateImageCrop,
   updateImageFilters,
   updateImageMask,
+  updateShapeStyle,
   updateTextStyle,
   updateElement,
   type Asset,
@@ -114,8 +119,22 @@ import {
   type ImageMask,
   type Selection,
   type SelectionBounds,
-  type ShapeType,
+  type TextElement,
 } from "@/editor/document"
+import {
+  SHAPE_DRAG_MIME,
+  getShapeRenderDescriptor,
+  isShapeType as isCatalogShapeType,
+  type PathCommand,
+  type ShapeCatalogItem,
+  type ShapeRenderDescriptor,
+  type ShapeType as CatalogShapeType,
+} from "@/editor/shapes"
+import {
+  TEXT_PRESET_DRAG_MIME,
+  createTextPresetElements,
+  getTextPreset,
+} from "@/editor/text-presets"
 import {
   createLocalAsset,
   isSupportedImageAsset,
@@ -125,8 +144,13 @@ import {
   type LibraryAsset,
 } from "@/editor/assets"
 import {
+  BACKGROUND_IMAGES,
+  filterBackgroundImages,
   filterBackgroundPalettes,
+  getBackgroundCoverCrop,
   normalizeBackgroundColorForPicker,
+  updateRecentBackgroundIds,
+  type BackgroundImage,
 } from "@/editor/backgrounds"
 import {
   createDocumentFingerprint,
@@ -180,6 +204,11 @@ import { snapElementPosition, type SnapGuide } from "@/editor/snapping"
 import { getEditorWheelZoom, getZoomedScrollPosition } from "@/editor/zoom"
 import { getContextMenuActions, type ContextMenuActionId } from "@/editor/context-menu"
 import {
+  MIN_ELEMENT_SIZE,
+  getLiveElementResize,
+  type ElementResizeBounds,
+} from "@/editor/resize"
+import {
   copyElementsToClipboard,
   pasteElementsFromClipboard,
   type ElementClipboard,
@@ -204,7 +233,12 @@ import {
 } from "@/editor/export"
 import { WorkspaceHome } from "@/components/dashboard/workspace-home"
 import { CanvasContextMenu } from "@/components/editor/canvas-context-menu"
+import { BackgroundLibrary } from "@/components/editor/background-library"
 import { ElementMetadataDialog } from "@/components/editor/element-metadata-dialog"
+import { InlineTextEditor } from "@/components/editor/inline-text-editor"
+import { LayersPanel, type LayerMove } from "@/components/editor/layers-panel"
+import { ShapesPanel } from "@/components/editor/shapes-panel"
+import { TextLibrary } from "@/components/editor/text-library"
 import {
   EditorContextSidebar,
   EditorFooter,
@@ -238,6 +272,12 @@ type ElementContextMenu = {
   elementId: string
   x: number
   y: number
+} | null
+type InlineTextEditing = {
+  pageId: string
+  elementId: string
+  originalText: string
+  draft: string
 } | null
 type AutosaveStatus = "local" | "saved" | "saving" | "loading" | "error"
 type ProjectPersistence = {
@@ -302,14 +342,12 @@ type DocumentUpdater = EditorDocument | ((currentDocument: EditorDocument) => Ed
 const colorSwatches = ["#111827", "#ffffff", "#ef4444", "#f59e0b", "#14b8a6", "#3b82f6", "#9cff6d"]
 const backgroundSwatches = ["#ffffff", "#f8fafc", "#fef3c7", "#d9f99d", "#ccfbf1", "#dbeafe", "#ede9fe", "#111827"]
 const SHOW_INSPECTOR = true
-const SHAPE_DRAG_MIME = "application/x-bacan-shape"
 const MAX_CANVAS_PREVIEW_SIZE = 720
 const MAX_ZOOMED_CANVAS_PREVIEW_SIZE = 1536
 const MIN_CANVAS_PREVIEW_SCALE = 0.05
 const SNAP_THRESHOLD_SCREEN_PX = 8
 const AUTOSAVE_DELAY_MS = 900
 const PAGE_EXIT_FALLBACK_MS = 420
-
 const localProjectPersistence: ProjectPersistence = {
   isEnabled: false,
   isLoading: false,
@@ -414,10 +452,6 @@ function readableType(element: CanvasElement) {
   return "Forma"
 }
 
-function isShapeType(value: string): value is ShapeType {
-  return SHAPE_OPTIONS.some((shape) => shape.type === value)
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
@@ -480,13 +514,19 @@ function hasDragSelectionArea(bounds: SelectionBounds) {
 }
 
 function isCanvasBackgroundTarget(target: Konva.Node) {
-  return target === target.getStage() || target.name() === "canvas-background" || target.name() === "canvas-placeholder"
+  return target === target.getStage() || target.name() === "canvas-background"
 }
 
-function useCanvasImage(src: string) {
+function useCanvasImage(src?: string) {
   const [image, setImage] = useState<HTMLImageElement | null>(null)
 
   useEffect(() => {
+    if (!src) {
+      setImage(null)
+      return
+    }
+
+    setImage(null)
     const nextImage = new window.Image()
     nextImage.onload = () => setImage(nextImage)
     nextImage.src = src
@@ -497,6 +537,169 @@ function useCanvasImage(src: string) {
   }, [src])
 
   return image
+}
+
+function CanvasBackground({
+  color,
+  imageSource,
+  width,
+  height,
+}: {
+  color: string
+  imageSource?: string
+  width: number
+  height: number
+}) {
+  const image = useCanvasImage(imageSource)
+  const crop = image
+    ? getBackgroundCoverCrop(
+        image.naturalWidth || image.width,
+        image.naturalHeight || image.height,
+        width,
+        height,
+      )
+    : undefined
+
+  return (
+    <>
+      <Rect name="canvas-background" width={width} height={height} fill={color} />
+      {image && crop ? (
+        <KonvaImage
+          name="canvas-background"
+          image={image}
+          width={width}
+          height={height}
+          crop={crop}
+          listening
+        />
+      ) : null}
+    </>
+  )
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unsupported shape descriptor: ${String(value)}`)
+}
+
+function createKonvaPathData(commands: readonly PathCommand[], width: number, height: number) {
+  return commands.map((command) => {
+    switch (command.command) {
+      case "M":
+        return `M ${command.x * width} ${command.y * height}`
+      case "L":
+        return `L ${command.x * width} ${command.y * height}`
+      case "C":
+        return `C ${command.controlX1 * width} ${command.controlY1 * height} ${command.controlX2 * width} ${command.controlY2 * height} ${command.x * width} ${command.y * height}`
+      case "Q":
+        return `Q ${command.controlX * width} ${command.controlY * height} ${command.x * width} ${command.y * height}`
+      case "Z":
+        return "Z"
+      default:
+        return assertNever(command)
+    }
+  }).join(" ")
+}
+
+function renderShapeDescriptor({
+  descriptor,
+  width,
+  height,
+  fill,
+  stroke,
+  strokeWidth,
+  opacity,
+}: {
+  descriptor: ShapeRenderDescriptor
+  width: number
+  height: number
+  fill: string
+  stroke: string
+  strokeWidth: number
+  opacity: number
+}) {
+  const centerX = width / 2
+  const centerY = height / 2
+  const radius = Math.min(width, height) / 2
+  const common = {
+    fill,
+    stroke,
+    strokeWidth,
+    opacity,
+    lineCap: "round" as const,
+    lineJoin: "round" as const,
+  }
+
+  switch (descriptor.kind) {
+    case "line": {
+      const points = [
+        descriptor.points[0] * width,
+        descriptor.points[1] * height,
+        descriptor.points[2] * width,
+        descriptor.points[3] * height,
+      ]
+
+      return (
+        <Line
+          points={points}
+          {...common}
+          fill="transparent"
+          dash={descriptor.dotted ? [4, 12] : descriptor.dashed ? [18, 12] : undefined}
+        />
+      )
+    }
+    case "arrow": {
+      const points = [
+        descriptor.points[0] * width,
+        descriptor.points[1] * height,
+        descriptor.points[2] * width,
+        descriptor.points[3] * height,
+      ]
+
+      return (
+        <KonvaArrow
+          points={points}
+          {...common}
+          fill={stroke}
+          pointerLength={Math.max(12, Math.min(width, height) * 0.1)}
+          pointerWidth={Math.max(10, Math.min(width, height) * 0.08)}
+          pointerAtBeginning={descriptor.startPointer}
+          dash={descriptor.dashed ? [18, 12] : undefined}
+        />
+      )
+    }
+    case "polygon":
+      return (
+        <RegularPolygon
+          x={centerX}
+          y={centerY}
+          sides={descriptor.sides}
+          radius={radius}
+          rotation={(descriptor.rotation * 180) / Math.PI}
+          {...common}
+        />
+      )
+    case "star":
+      return (
+        <KonvaStar
+          x={centerX}
+          y={centerY}
+          numPoints={descriptor.points}
+          innerRadius={radius * descriptor.innerRadiusRatio}
+          outerRadius={radius}
+          rotation={(descriptor.rotation * 180) / Math.PI}
+          {...common}
+        />
+      )
+    case "path":
+      return (
+        <KonvaPath
+          data={createKonvaPathData(descriptor.commands, width, height)}
+          {...common}
+        />
+      )
+    default:
+      return assertNever(descriptor)
+  }
 }
 
 function EditableImage({
@@ -591,51 +794,22 @@ function EditableShape({
 }: {
   element: Extract<CanvasElement, { type: "shape" }>
 }) {
-  if (element.shapeType === "circle") {
-    return (
-      <KonvaCircle
-        x={element.width / 2}
-        y={element.height / 2}
-        radius={Math.min(element.width, element.height) / 2}
-        fill={element.fill}
-        stroke={element.stroke}
-        strokeWidth={2}
-        opacity={element.opacity}
-      />
-    )
-  }
-
-  if (element.shapeType === "triangle") {
-    return (
-      <RegularPolygon
-        x={element.width / 2}
-        y={element.height / 2}
-        sides={3}
-        radius={Math.min(element.width, element.height) / 2}
-        fill={element.fill}
-        stroke={element.stroke}
-        strokeWidth={2}
-        opacity={element.opacity}
-      />
-    )
-  }
-
-  return (
-    <Rect
-      width={element.width}
-      height={element.height}
-      cornerRadius={12}
-      fill={element.fill}
-      stroke={element.stroke}
-      strokeWidth={2}
-      opacity={element.opacity}
-    />
-  )
+  const shapeElement = normalizeShapeElement(element)
+  return renderShapeDescriptor({
+    descriptor: getShapeRenderDescriptor(shapeElement.shapeType),
+    width: shapeElement.width,
+    height: shapeElement.height,
+    fill: shapeElement.fill,
+    stroke: shapeElement.stroke,
+    strokeWidth: shapeElement.strokeWidth,
+    opacity: shapeElement.opacity,
+  })
 }
 
 function EditableElement({
   element,
   isSelected,
+  isTextEditing,
   canTransform,
   onSelect,
   onChange,
@@ -648,6 +822,7 @@ function EditableElement({
 }: {
   element: CanvasElement
   isSelected: boolean
+  isTextEditing: boolean
   canTransform: boolean
   onSelect: (additive: boolean) => void
   onChange: (changes: Partial<CanvasElement>) => void
@@ -660,7 +835,10 @@ function EditableElement({
 }) {
   const groupRef = useRef<Konva.Group>(null)
   const transformerRef = useRef<Konva.Transformer>(null)
-  const textElement = element.type === "text" ? normalizeTextElement(element) : null
+  const liveResizeRef = useRef<ElementResizeBounds | null>(null)
+  const [liveResize, setLiveResize] = useState<ElementResizeBounds | null>(null)
+  const displayElement: CanvasElement = liveResize ? { ...element, ...liveResize } : element
+  const textElement = displayElement.type === "text" ? normalizeTextElement(displayElement) : null
   const isVisible = element.visible ?? true
 
   useEffect(() => {
@@ -671,6 +849,44 @@ function EditableElement({
     transformerRef.current.nodes([groupRef.current])
     transformerRef.current.getLayer()?.batchDraw()
   }, [isSelected, element])
+
+  useLayoutEffect(() => {
+    if (!liveResize) {
+      return
+    }
+
+    transformerRef.current?.forceUpdate()
+    transformerRef.current?.getLayer()?.batchDraw()
+  }, [liveResize])
+
+  const handleTransform = () => {
+    if (element.type !== "text" || element.locked) {
+      return
+    }
+
+    const node = groupRef.current
+
+    if (!node) {
+      return
+    }
+
+    const currentBounds = liveResizeRef.current ?? element
+    const resized = getLiveElementResize(currentBounds, {
+      x: node.x(),
+      y: node.y(),
+      scaleX: node.scaleX(),
+      scaleY: node.scaleY(),
+      rotation: node.rotation(),
+    })
+    const { scaleX, scaleY, ...nextBounds } = resized
+
+    node.scaleX(scaleX)
+    node.scaleY(scaleY)
+    node.width(nextBounds.width)
+    node.height(nextBounds.height)
+    liveResizeRef.current = nextBounds
+    setLiveResize(nextBounds)
+  }
 
   const handleTransformEnd = () => {
     if (element.locked) {
@@ -683,6 +899,21 @@ function EditableElement({
       return
     }
 
+    if (element.type === "text") {
+      handleTransform()
+
+      const nextBounds = liveResizeRef.current
+
+      liveResizeRef.current = null
+      setLiveResize(null)
+
+      if (nextBounds) {
+        onChange(nextBounds)
+      }
+
+      return
+    }
+
     const scaleX = node.scaleX()
     const scaleY = node.scaleY()
 
@@ -692,8 +923,8 @@ function EditableElement({
     onChange({
       x: node.x(),
       y: node.y(),
-      width: Math.max(28, element.width * scaleX),
-      height: Math.max(28, element.height * scaleY),
+      width: Math.max(MIN_ELEMENT_SIZE, element.width * scaleX),
+      height: Math.max(MIN_ELEMENT_SIZE, element.height * scaleY),
       rotation: node.rotation(),
     })
   }
@@ -706,12 +937,12 @@ function EditableElement({
     <>
       <KonvaGroup
         ref={groupRef}
-        x={element.x}
-        y={element.y}
-        width={element.width}
-        height={element.height}
-        rotation={element.rotation}
-        draggable={!element.locked}
+        x={displayElement.x}
+        y={displayElement.y}
+        width={displayElement.width}
+        height={displayElement.height}
+        rotation={displayElement.rotation}
+        draggable={!element.locked && !isTextEditing}
         onMouseEnter={(event) => {
           event.target.getStage()?.container().style.setProperty("cursor", "pointer")
         }}
@@ -726,12 +957,12 @@ function EditableElement({
           onContextMenu({ x: event.evt.clientX, y: event.evt.clientY })
         }}
         onDblClick={() => {
-          if (element.type === "text") {
+          if (element.type === "text" && !element.locked) {
             onTextDoubleClick()
           }
         }}
         onDblTap={() => {
-          if (element.type === "text") {
+          if (element.type === "text" && !element.locked) {
             onTextDoubleClick()
           }
         }}
@@ -755,12 +986,14 @@ function EditableElement({
           })
           onDragEnd()
         }}
+        onTransform={handleTransform}
         onTransformEnd={handleTransformEnd}
       >
-        {element.type === "image" ? <EditableImage element={element} /> : null}
-        {element.type === "shape" ? <EditableShape element={element} /> : null}
+        {displayElement.type === "image" ? <EditableImage element={displayElement} /> : null}
+        {displayElement.type === "shape" ? <EditableShape element={displayElement} /> : null}
         {textElement ? (
           <Text
+            visible={!isTextEditing}
             text={textElement.text}
             width={textElement.width}
             height={textElement.height}
@@ -776,10 +1009,10 @@ function EditableElement({
             opacity={textElement.opacity}
           />
         ) : null}
-        {isSelected && showSelectionControls ? (
+        {isSelected && showSelectionControls && !isTextEditing ? (
           <Rect
-            width={element.width}
-            height={element.height}
+            width={displayElement.width}
+            height={displayElement.height}
             listening={false}
             stroke="#9cff6d"
             strokeWidth={4}
@@ -787,7 +1020,7 @@ function EditableElement({
           />
         ) : null}
       </KonvaGroup>
-      {isSelected && showSelectionControls && canTransform && !element.locked ? (
+      {isSelected && showSelectionControls && canTransform && !element.locked && !isTextEditing ? (
         <Transformer
           ref={transformerRef}
           rotateEnabled
@@ -796,7 +1029,7 @@ function EditableElement({
           anchorFill="#ffffff"
           anchorSize={10}
           boundBoxFunc={(oldBox, newBox) => {
-            if (newBox.width < 28 || newBox.height < 28) {
+            if (newBox.width < MIN_ELEMENT_SIZE || newBox.height < MIN_ELEMENT_SIZE) {
               return oldBox
             }
 
@@ -931,7 +1164,12 @@ function SharedProjectPreview({
             <div className="mx-auto w-fit bg-white ring-1 ring-black/40">
               <Stage width={previewWidth} height={previewHeight} scaleX={previewScale} scaleY={previewScale}>
                 <KonvaLayer>
-                  <Rect width={documentSize.width} height={documentSize.height} fill={page.background} />
+                  <CanvasBackground
+                    color={page.background}
+                    imageSource={page.backgroundImage}
+                    width={documentSize.width}
+                    height={documentSize.height}
+                  />
                   {page.elements.map((element) => (
                     <StaticCanvasElement key={element.id} element={element} />
                   ))}
@@ -1016,7 +1254,11 @@ function EditorApp({
   const [activePageId, setActivePageId] = useState<string | null>(null)
   const [activeTool, setActiveTool] = useState<ToolId>("layers")
   const [panelSearchQuery, setPanelSearchQuery] = useState("")
+  const [recentShapeTypes, setRecentShapeTypes] = useState<CatalogShapeType[]>([])
   const [expandedBackgroundPaletteId, setExpandedBackgroundPaletteId] = useState<string | null>(null)
+  const [recentBackgroundIds, setRecentBackgroundIds] = useState(() =>
+    BACKGROUND_IMAGES.slice(0, 3).map((background) => background.id),
+  )
   const [exportOptions, setExportOptions] = useState(() => createExportOptions())
   const [animatingPageId, setAnimatingPageId] = useState<string | null>(null)
   const [removingPageId, setRemovingPageId] = useState<string | null>(null)
@@ -1024,7 +1266,7 @@ function EditorApp({
   const [elementContextMenu, setElementContextMenu] = useState<ElementContextMenu>(null)
   const [elementClipboard, setElementClipboard] = useState<ElementClipboard>({ elements: [] })
   const [elementMetadataEditor, setElementMetadataEditor] = useState<ElementMetadataEditor>(null)
-  const [editingText, setEditingText] = useState("")
+  const [inlineTextEditing, setInlineTextEditing] = useState<InlineTextEditing>(null)
   const [snapPreview, setSnapPreview] = useState<SnapPreview>(null)
   const [dragSelection, setDragSelection] = useState<DragSelection>(null)
   const [isExporting, setIsExporting] = useState(false)
@@ -1115,7 +1357,19 @@ function EditorApp({
   const allSelectedLocked = selectedElements.length > 0 && selectedElements.every((element) => element.locked)
   const selectedElementsHaveGroup = selectedElements.some((element) => element.groupId)
   const selectedImageElement = selectedElement?.type === "image" ? normalizeImageElement(selectedElement) : null
+  const selectedShapeElement = selectedElement?.type === "shape" ? normalizeShapeElement(selectedElement) : null
   const selectedTextElement = selectedElement?.type === "text" ? normalizeTextElement(selectedElement) : null
+  const inlineTextElement = useMemo(() => {
+    if (!inlineTextEditing) {
+      return null
+    }
+
+    const element = document.pages
+      .find((page) => page.id === inlineTextEditing.pageId)
+      ?.elements.find((pageElement) => pageElement.id === inlineTextEditing.elementId)
+
+    return element?.type === "text" ? normalizeTextElement(element) : null
+  }, [document, inlineTextEditing])
   const presenceSelectionName = hasMultiSelection
     ? `${selectedElementIds.length} capas`
     : selectedElement?.name ?? null
@@ -1144,6 +1398,12 @@ function EditorApp({
         : null,
     [document, elementContextMenu],
   )
+  const contextMenuLayerPosition = useMemo(
+    () => elementContextMenu
+      ? getElementLayerPosition(document, elementContextMenu.pageId, elementContextMenu.elementId)
+      : null,
+    [document, elementContextMenu],
+  )
   const contextMenuActions = useMemo(
     () => getContextMenuActions({
       document,
@@ -1169,12 +1429,6 @@ function EditorApp({
       setActivePageId(document.pages[0]?.id ?? null)
     }
   }, [activePageId, document.pages])
-
-  useEffect(() => {
-    if (selectedElement?.type === "text") {
-      setEditingText(selectedElement.text)
-    }
-  }, [selectedElement])
 
   useEffect(() => {
     setPanelSearchQuery("")
@@ -1263,7 +1517,7 @@ function EditorApp({
     observer.observe(viewport)
 
     return () => observer.disconnect()
-  }, [documentSize.height, documentSize.width])
+  }, [documentSize.height, documentSize.width, workspaceView])
 
   useEffect(() => {
     const viewport = canvasViewportRef.current
@@ -1601,6 +1855,44 @@ function EditorApp({
     )
   }
 
+  const startInlineTextEditing = (pageId: string, element: TextElement) => {
+    if (element.locked) {
+      return
+    }
+
+    closeElementContextMenu()
+    setActivePageId(pageId)
+    setSelection({ pageId, elementId: element.id })
+    setInlineTextEditing({
+      pageId,
+      elementId: element.id,
+      originalText: element.text,
+      draft: element.text,
+    })
+  }
+
+  const cancelInlineTextEditing = () => {
+    setInlineTextEditing(null)
+  }
+
+  const commitInlineTextEditing = () => {
+    if (!inlineTextEditing) {
+      return
+    }
+
+    const { pageId, elementId, originalText, draft } = inlineTextEditing
+
+    setInlineTextEditing(null)
+
+    if (draft === originalText) {
+      return
+    }
+
+    setDocument((currentDocument) =>
+      updateElement(currentDocument, pageId, elementId, { text: draft }),
+    )
+  }
+
   const selectEveryElementOnActivePage = () => {
     if (!resolvedActivePageId) {
       return
@@ -1706,24 +1998,57 @@ function EditorApp({
     event.target.value = ""
   }
 
+  const addTextPreset = (
+    presetId: string,
+    pageId = resolvedActivePageId,
+    position?: { x: number; y: number },
+  ) => {
+    if (!pageId || !getTextPreset(presetId)) {
+      return
+    }
+
+    const elements: TextElement[] = createTextPresetElements({
+      presetId,
+      createId,
+      canvasSize: documentSize,
+      position,
+    })
+
+    if (elements.length === 0) {
+      return
+    }
+
+    setDocument((currentDocument) =>
+      elements.reduce(
+        (nextDocument, element) => addElementToPage(nextDocument, pageId, element),
+        currentDocument,
+      ),
+    )
+    setActivePageId(pageId)
+    setSelection(
+      elements.length === 1
+        ? { pageId, elementId: elements[0].id }
+        : createMultiSelection(pageId, elements.map((element) => element.id)),
+    )
+  }
+
   const addText = () => {
-    if (!resolvedActivePageId) {
+    const pageId = resolvedActivePageId
+
+    if (!pageId) {
       return
     }
 
     const element = createTextElement(createId, documentSize)
-    setDocument((currentDocument) => addElementToPage(currentDocument, resolvedActivePageId, element))
-    setActivePageId(resolvedActivePageId)
-    setSelection({ pageId: resolvedActivePageId, elementId: element.id })
+    setDocument((currentDocument) => addElementToPage(currentDocument, pageId, element))
+    setActivePageId(pageId)
+    setSelection({ pageId, elementId: element.id })
   }
 
   const addShape = (
-    shapeType: ShapeType,
+    shapeType: CatalogShapeType,
     pageId = resolvedActivePageId,
-    position = {
-      x: Math.round((documentSize.width - DEFAULT_SHAPE_SIZE.width) / 2),
-      y: Math.round((documentSize.height - DEFAULT_SHAPE_SIZE.height) / 2),
-    },
+    position?: { x: number; y: number },
   ) => {
     if (!pageId) {
       return
@@ -1735,10 +2060,18 @@ function EditorApp({
     setSelection({ pageId, elementId: element.id })
   }
 
+  const addCatalogShape = (item: ShapeCatalogItem, pageId = resolvedActivePageId) => {
+    setRecentShapeTypes((currentTypes) => [
+      item.type,
+      ...currentTypes.filter((type) => type !== item.type),
+    ].slice(0, 5))
+    addShape(item.type, pageId)
+  }
+
   const dropShapeOnPage = (event: DragEvent<HTMLDivElement>, pageId: string) => {
     const shapeType = event.dataTransfer.getData(SHAPE_DRAG_MIME)
 
-    if (!isShapeType(shapeType)) {
+    if (!isCatalogShapeType(shapeType)) {
       return
     }
 
@@ -1751,8 +2084,7 @@ function EditorApp({
       return
     }
 
-    const shapeWidth = DEFAULT_SHAPE_SIZE.width
-    const shapeHeight = DEFAULT_SHAPE_SIZE.height
+    const { width: shapeWidth, height: shapeHeight } = getShapeElementDefaultSize(shapeType, documentSize)
     const x = clamp(
       (event.clientX - canvasRect.left) / canvasPreviewScale - shapeWidth / 2,
       0,
@@ -1764,11 +2096,43 @@ function EditorApp({
       documentSize.height - shapeHeight,
     )
 
+    setRecentShapeTypes((currentTypes) => [
+      shapeType,
+      ...currentTypes.filter((type) => type !== shapeType),
+    ].slice(0, 5))
     addShape(shapeType, pageId, { x, y })
   }
 
+  const dropTextPresetOnPage = (event: DragEvent<HTMLDivElement>, pageId: string) => {
+    const presetId = event.dataTransfer.getData(TEXT_PRESET_DRAG_MIME)
+
+    if (!getTextPreset(presetId)) {
+      return false
+    }
+
+    event.preventDefault()
+
+    const stage = stageRefs.current[pageId]
+    const canvasRect = stage?.container().getBoundingClientRect()
+
+    if (!canvasRect) {
+      return true
+    }
+
+    addTextPreset(presetId, pageId, {
+      x: (event.clientX - canvasRect.left) / canvasPreviewScale,
+      y: (event.clientY - canvasRect.top) / canvasPreviewScale,
+    })
+
+    return true
+  }
+
   const handlePageDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (event.dataTransfer.types.includes(SHAPE_DRAG_MIME) || event.dataTransfer.types.includes("Files")) {
+    if (
+      event.dataTransfer.types.includes(TEXT_PRESET_DRAG_MIME) ||
+      event.dataTransfer.types.includes(SHAPE_DRAG_MIME) ||
+      event.dataTransfer.types.includes("Files")
+    ) {
       event.preventDefault()
       event.dataTransfer.dropEffect = "copy"
     }
@@ -1780,6 +2144,10 @@ function EditorApp({
     if (files.length > 0) {
       event.preventDefault()
       files.forEach((file) => void addAssetFromFile(file, pageId))
+      return
+    }
+
+    if (dropTextPresetOnPage(event, pageId)) {
       return
     }
 
@@ -1844,10 +2212,13 @@ function EditorApp({
   }
 
   const updatePageBackground = (pageId: string, background: string) => {
-    setDocument((currentDocument) => ({
-      ...currentDocument,
-      pages: currentDocument.pages.map((page) => (page.id === pageId ? { ...page, background } : page)),
-    }))
+    setDocument((currentDocument) => setPageBackgroundColor(currentDocument, pageId, background))
+    setActivePageId(pageId)
+  }
+
+  const updatePageBackgroundImage = (pageId: string, background: BackgroundImage) => {
+    setDocument((currentDocument) => setPageBackgroundImage(currentDocument, pageId, background.src))
+    setRecentBackgroundIds((currentIds) => updateRecentBackgroundIds(currentIds, background.id))
     setActivePageId(pageId)
   }
 
@@ -1868,6 +2239,16 @@ function EditorApp({
 
     setDocument((currentDocument) =>
       updateTextStyle(currentDocument, selection.pageId, selectedElement.id, changes),
+    )
+  }
+
+  const updateSelectedShapeStyle = (changes: Parameters<typeof updateShapeStyle>[3]) => {
+    if (!selection || !selectedElement) {
+      return
+    }
+
+    setDocument((currentDocument) =>
+      updateShapeStyle(currentDocument, selection.pageId, selectedElement.id, changes),
     )
   }
 
@@ -2071,6 +2452,21 @@ function EditorApp({
 
     setDocument((currentDocument) =>
       moveElementToBack(currentDocument, selection.pageId, selectedElement.id),
+    )
+  }
+
+  const moveLayerElement = (pageId: string, elementId: string, move: LayerMove) => {
+    setDocument((currentDocument) => {
+      if (move === "forward") return moveElementForward(currentDocument, pageId, elementId)
+      if (move === "backward") return moveElementBackward(currentDocument, pageId, elementId)
+      if (move === "front") return moveElementToFront(currentDocument, pageId, elementId)
+      return moveElementToBack(currentDocument, pageId, elementId)
+    })
+  }
+
+  const reorderLayerElement = (pageId: string, elementId: string, targetIndex: number) => {
+    setDocument((currentDocument) =>
+      moveElementToLayerIndex(currentDocument, pageId, elementId, targetIndex),
     )
   }
 
@@ -2332,7 +2728,6 @@ function EditorApp({
   )
 
   const renderToolPanel = () => {
-    const filteredShapes = filterSearchItems(SHAPE_OPTIONS, panelSearchQuery, ["label", "type"])
     const filteredAssets = filterSearchItems(assets, panelSearchQuery, ["name"])
     const filteredBackgroundSwatches = filterSearchItems(
       backgroundSwatches.map((color) => ({ color })),
@@ -2349,8 +2744,6 @@ function EditorApp({
       "category",
       (format) => `${format.size.width} ${format.size.height}`,
     ])
-    const layerItems = [...(activePage?.elements ?? [])].reverse()
-    const filteredLayerItems = filterSearchItems(layerItems, panelSearchQuery, ["name", "type"])
     const toolActions = [
       { icon: MousePointer2, label: "Seleccionar", onClick: () => setSelection(null), disabled: false },
       { icon: Undo2, label: "Deshacer", onClick: undoDocument, disabled: !canUndo },
@@ -2381,134 +2774,36 @@ function EditorApp({
         disabled: !hasSelection,
       },
       { icon: Trash2, label: "Eliminar", onClick: removeSelected, disabled: !hasSelection },
-      { icon: Download, label: "Exportar", onClick: exportActivePage, disabled: totalElements === 0 },
+      { icon: Download, label: "Exportar", onClick: exportActivePage, disabled: !activePage },
     ]
     const filteredToolActions = filterSearchItems(toolActions, panelSearchQuery, ["label"])
 
     if (activeTool === "elements") {
-      return (
-        <>
-          {renderPanelSearch("Busca elementos")}
-          <div className="grid grid-cols-3 gap-2">
-            {filteredShapes.map((shape) => {
-              const Icon = shape.type === "circle" ? Circle : shape.type === "triangle" ? Triangle : Square
-
-              return (
-                <button
-                  key={shape.type}
-                  type="button"
-                  draggable
-                  className="flex h-20 flex-col items-center justify-center gap-2 rounded-md border border-white/10 bg-[#181c20] text-xs font-semibold text-slate-200 transition hover:border-[#9cff6d]"
-                  onClick={() => addShape(shape.type)}
-                  onDragStart={(event) => {
-                    event.dataTransfer.effectAllowed = "copy"
-                    event.dataTransfer.setData(SHAPE_DRAG_MIME, shape.type)
-                  }}
-                >
-                  <Icon className="size-6" style={{ color: shape.fill }} />
-                  {shape.label}
-                </button>
-              )
-            })}
-          </div>
-        </>
-      )
+      return <ShapesPanel className="h-full p-4" recentShapeTypes={recentShapeTypes} onAddShape={addCatalogShape} />
     }
 
     if (activeTool === "layers") {
       return (
         <>
           {renderPanelSearch("Busca capas")}
-          <div className="space-y-2">
-            {!activePage || activePage.elements.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                Agrega elementos para ver tus capas aqui.
-              </div>
-            ) : null}
-            {activePage && activePage.elements.length > 0 && filteredLayerItems.length === 0 ? (
-              <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                No hay capas para esa busqueda.
-              </div>
-            ) : null}
-            {filteredLayerItems.map((element) => {
-              const isLayerSelected = activePage ? selectionIncludesElement(selection, activePage.id, element.id) : false
-              const isLayerVisible = element.visible ?? true
-
-              return (
-                <div
-                  key={element.id}
-                  className={`flex items-center gap-2 rounded-md border px-2 py-2 text-sm transition ${
-                    isLayerSelected ? "border-[#9cff6d] bg-[#17231d]" : "border-white/10 bg-[#181c20]"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={(event) => {
-                      if (!activePage) {
-                        return
-                      }
-
-                      selectElement(activePage.id, element.id, event.shiftKey || event.metaKey)
-                    }}
-                  >
-                    <span className="block truncate font-semibold text-slate-100">{element.name}</span>
-                    <span className="text-xs text-slate-500">
-                      {readableType(element)}
-                      {element.groupId ? " - agrupado" : ""}
-                    </span>
-                  </button>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-sm"
-                        variant="outline"
-                        aria-label={isLayerVisible ? "Ocultar capa" : "Mostrar capa"}
-                        onClick={() => activePage ? toggleLayerVisibility(activePage.id, element.id) : null}
-                      >
-                        {isLayerVisible ? <Eye /> : <EyeOff />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{isLayerVisible ? "Ocultar" : "Mostrar"}</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-sm"
-                        variant={element.locked ? "default" : "outline"}
-                        aria-label={element.locked ? "Desbloquear capa" : "Bloquear capa"}
-                        onClick={() => {
-                          if (!activePage) {
-                            return
-                          }
-
-                          setDocument((currentDocument) =>
-                            toggleElementLocked(currentDocument, activePage.id, element.id),
-                          )
-                        }}
-                      >
-                        <Lock />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{element.locked ? "Desbloquear" : "Bloquear"}</TooltipContent>
-                  </Tooltip>
-                </div>
-              )
-            })}
-          </div>
+          <LayersPanel
+            page={activePage}
+            searchQuery={panelSearchQuery}
+            selection={selection}
+            onSelectElement={selectElement}
+            onToggleVisibility={toggleLayerVisibility}
+            onToggleLocked={(pageId, elementId) => {
+              setDocument((currentDocument) => toggleElementLocked(currentDocument, pageId, elementId))
+            }}
+            onMoveElement={moveLayerElement}
+            onReorderElement={reorderLayerElement}
+          />
         </>
       )
     }
 
     if (activeTool === "text") {
-      return (
-        <>
-          <Button className="h-12 w-full bg-[#9cff6d] text-base font-bold text-[#09100d] hover:bg-[#8de85f]" onClick={addText}>
-            <Type data-icon="inline-start" />
-            Agregar caja de texto
-          </Button>
-        </>
-      )
+      return <TextLibrary onAddText={addText} onAddPreset={addTextPreset} />
     }
 
     if (activeTool === "uploads" || activeTool === "photos") {
@@ -2571,52 +2866,29 @@ function EditorApp({
 
     if (activeTool === "background") {
       const activeBackgroundColor = normalizeBackgroundColorForPicker(activePage?.background ?? "#ffffff")
+      const filteredBackgroundImages = filterBackgroundImages(panelSearchQuery)
+      const recentBackgrounds = panelSearchQuery.trim()
+        ? []
+        : recentBackgroundIds.flatMap((id) => {
+            const background = BACKGROUND_IMAGES.find((candidate) => candidate.id === id)
+
+            return background ? [background] : []
+          })
 
       return (
         <>
           {renderPanelSearch("Busca fondos")}
 
-          <section className="editor-background-controls space-y-2">
-            <Label htmlFor="custom-background-color">Color personalizado</Label>
-            <div className="editor-custom-background-color flex items-center gap-3 rounded-md border border-white/10 bg-[#181c20] p-2">
-              <input
-                id="custom-background-color"
-                type="color"
-                value={activeBackgroundColor}
-                className="editor-color-picker h-10 w-14 shrink-0 cursor-pointer rounded-md bg-transparent"
-                aria-label="Elegir color de fondo personalizado"
-                onChange={(event) => {
-                  if (activePage) {
-                    updatePageBackground(activePage.id, event.target.value)
-                  }
-                }}
-              />
-              <span className="font-mono text-sm font-semibold uppercase text-slate-300">
-                {activeBackgroundColor}
-              </span>
-            </div>
-          </section>
-
-          <section className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Colores rapidos</h3>
-            <div className="grid grid-cols-4 gap-2">
-              {filteredBackgroundSwatches.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={`aspect-square rounded-md border-2 transition-colors hover:border-[#9cff6d] ${
-                    activeBackgroundColor === color.toLowerCase()
-                      ? "border-[#9cff6d]"
-                      : "border-white/15"
-                  }`}
-                  style={{ backgroundColor: color }}
-                  aria-label={`Fondo ${color}`}
-                  aria-pressed={activeBackgroundColor === color.toLowerCase()}
-                  onClick={() => activePage ? updatePageBackground(activePage.id, color) : null}
-                />
-              ))}
-            </div>
-          </section>
+          <BackgroundLibrary
+            activeColor={activeBackgroundColor}
+            activeImageSrc={activePage?.backgroundImage}
+            colorSwatches={filteredBackgroundSwatches}
+            images={filteredBackgroundImages}
+            recentImages={recentBackgrounds}
+            onColorChange={(color) => activePage ? updatePageBackground(activePage.id, color) : null}
+            onImageSelect={(background) => activePage ? updatePageBackgroundImage(activePage.id, background) : null}
+            onShowAll={() => setPanelSearchQuery("")}
+          />
 
           <section className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Paletas</h3>
@@ -2686,11 +2958,6 @@ function EditorApp({
             </div>
           </section>
 
-          {filteredBackgroundSwatches.length === 0 && filteredBackgroundPalettes.length === 0 ? (
-            <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-              No hay fondos para esa busqueda.
-            </div>
-          ) : null}
         </>
       )
     }
@@ -3116,12 +3383,13 @@ function EditorApp({
         theme={theme}
       />
 
-      <div className="grid min-h-[calc(100vh-4rem)] grid-cols-[96px_minmax(0,1fr)] lg:grid-cols-[96px_320px_minmax(0,1fr)] xl:grid-cols-[96px_320px_minmax(0,1fr)_320px]">
+      <div className={`grid h-[calc(100vh-4rem)] min-h-0 overflow-hidden grid-cols-[96px_minmax(0,1fr)] ${activeTool === "elements" ? "lg:grid-cols-[96px_360px_minmax(0,1fr)] xl:grid-cols-[96px_360px_minmax(0,1fr)_320px]" : "lg:grid-cols-[96px_320px_minmax(0,1fr)] xl:grid-cols-[96px_320px_minmax(0,1fr)_320px]"}`}>
         <EditorToolRail activeTool={activeTool} tools={sidebarTools} onSelectTool={setActiveTool} />
 
         <EditorContextSidebar
+          immersive={activeTool === "elements"}
           title={activeTool === "templates" ? "Redimensionar" : sidebarTools.find((tool) => tool.id === activeTool)?.label ?? "Herramientas"}
-          badgeLabel={`${assets.length} assets`}
+          badgeLabel={activeTool === "uploads" || activeTool === "photos" ? `${assets.length} assets` : undefined}
         >
           {renderToolPanel()}
         </EditorContextSidebar>
@@ -3244,7 +3512,7 @@ function EditorApp({
                   </div>
 
                   <div
-                    className="mx-auto w-fit overflow-hidden rounded-[3px] bg-white ring-1 ring-white/10"
+                    className="relative mx-auto w-fit overflow-hidden rounded-[3px] bg-white ring-1 ring-white/10"
                     onDragOver={handlePageDragOver}
                     onDrop={(event) => handlePageDrop(event, page.id)}
                   >
@@ -3289,29 +3557,21 @@ function EditorApp({
                       }}
                     >
                       <KonvaLayer>
-                        <Rect
-                          name="canvas-background"
+                        <CanvasBackground
+                          color={page.background}
+                          imageSource={page.backgroundImage}
                           width={documentSize.width}
                           height={documentSize.height}
-                          fill={page.background}
                         />
-                        {page.elements.length === 0 ? (
-                          <Text
-                            name="canvas-placeholder"
-                            text="Sube una imagen, agrega texto o inserta una forma"
-                            x={documentSize.width * 0.18}
-                            y={documentSize.height / 2 - 42}
-                            width={documentSize.width * 0.64}
-                            align="center"
-                            fill="#64748b"
-                            fontSize={48}
-                          />
-                        ) : null}
                         {page.elements.map((element) => (
                           <EditableElement
                             key={element.id}
                             element={element}
                             isSelected={selectionIncludesElement(selection, page.id, element.id)}
+                            isTextEditing={
+                              inlineTextEditing?.pageId === page.id &&
+                              inlineTextEditing.elementId === element.id
+                            }
                             canTransform={!hasMultiSelection}
                             showSelectionControls={showSelectionControls}
                             onSelect={(additive) => selectElement(page.id, element.id, additive)}
@@ -3365,9 +3625,9 @@ function EditorApp({
                               openElementContextMenu(page.id, element.id, position)
                             }
                             onTextDoubleClick={() => {
-                              setActivePageId(page.id)
-                              setSelection({ pageId: page.id, elementId: element.id })
-                              setEditingText(element.type === "text" ? element.text : "")
+                              if (element.type === "text") {
+                                startInlineTextEditing(page.id, normalizeTextElement(element))
+                              }
                             }}
                           />
                         ))}
@@ -3403,6 +3663,20 @@ function EditorApp({
                         ) : null}
                       </KonvaLayer>
                     </Stage>
+                    {inlineTextEditing?.pageId === page.id && inlineTextElement ? (
+                      <InlineTextEditor
+                        canvasScale={canvasPreviewScale}
+                        element={inlineTextElement}
+                        value={inlineTextEditing.draft}
+                        onChange={(draft) =>
+                          setInlineTextEditing((currentEditing) =>
+                            currentEditing ? { ...currentEditing, draft } : currentEditing,
+                          )
+                        }
+                        onCancel={cancelInlineTextEditing}
+                        onCommit={commitInlineTextEditing}
+                      />
+                    ) : null}
                   </div>
                   {pageIndex === document.pages.length - 1 ? (
                     <div className="editor-add-page mx-auto mt-5 flex h-12 overflow-hidden rounded-md border border-white/12 bg-[#101417] text-[#cfd7d2]" style={{ width: canvasPreviewWidth }}>
@@ -3484,6 +3758,39 @@ function EditorApp({
                 shortcut: "⌘D",
                 disabled: !contextMenuActionById.duplicate.enabled,
                 onSelect: duplicateContextMenuElement,
+              },
+              {
+                id: "position",
+                label: "Posición",
+                icon: BringToFront,
+                disabled: !contextMenuActionById.position.enabled,
+                submenu: [
+                  {
+                    label: "Traer al frente",
+                    icon: ChevronsUp,
+                    disabled: contextMenuLayerPosition?.isFront ?? true,
+                    onSelect: () => moveLayerElement(elementContextMenu.pageId, elementContextMenu.elementId, "front"),
+                  },
+                  {
+                    label: "Traer hacia delante",
+                    icon: ChevronUp,
+                    disabled: contextMenuLayerPosition?.isFront ?? true,
+                    onSelect: () => moveLayerElement(elementContextMenu.pageId, elementContextMenu.elementId, "forward"),
+                  },
+                  {
+                    label: "Enviar hacia atrás",
+                    icon: ChevronDown,
+                    separatorBefore: true,
+                    disabled: contextMenuLayerPosition?.isBack ?? true,
+                    onSelect: () => moveLayerElement(elementContextMenu.pageId, elementContextMenu.elementId, "backward"),
+                  },
+                  {
+                    label: "Enviar al fondo",
+                    icon: ChevronsDown,
+                    disabled: contextMenuLayerPosition?.isBack ?? true,
+                    onSelect: () => moveLayerElement(elementContextMenu.pageId, elementContextMenu.elementId, "back"),
+                  },
+                ],
               },
               {
                 id: "delete",
@@ -3591,7 +3898,7 @@ function EditorApp({
         ) : null}
 
         {SHOW_INSPECTOR ? (
-        <aside className="editor-inspector hidden border-l border-white/8 bg-[#121619] p-4 text-slate-100 xl:block">
+        <aside className="editor-inspector hidden min-h-0 overflow-y-auto border-l border-white/8 bg-[#121619] p-4 text-slate-100 xl:block">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-white">Inspector</h2>
@@ -3701,18 +4008,6 @@ function EditorApp({
             <div className="space-y-5">
               {selectedTextElement ? (
                 <>
-                  <div className="space-y-2">
-                    <Label htmlFor="text-content">Texto</Label>
-                    <Input
-                      id="text-content"
-                      value={editingText}
-                      onChange={(event) => {
-                        setEditingText(event.target.value)
-                        updateSelected({ text: event.target.value })
-                      }}
-                    />
-                  </div>
-
                   <div className="space-y-2">
                     <Label>Fuente</Label>
                     <div className="editor-font-list max-h-44 overflow-y-auto rounded-lg border border-white/10 bg-[#0e1115] p-1">
@@ -4039,29 +4334,103 @@ function EditorApp({
                 </div>
                 <Slider
                   value={[selectedElement.opacity]}
-                  min={0.1}
+                  min={0}
                   max={1}
                   step={0.05}
+                  aria-label="Opacidad del elemento"
                   onValueChange={([opacity]) => updateSelected({ opacity })}
                 />
               </div>
 
               {selectedElement.type === "shape" || selectedElement.type === "text" ? (
                 <div className="space-y-3">
-                  <Label>Color</Label>
+                  <Label htmlFor="element-fill-color">Color de relleno</Label>
+                  <div className="editor-custom-element-color flex items-center gap-3 rounded-md border border-white/10 bg-[#181c20] p-2">
+                    <input
+                      id="element-fill-color"
+                      type="color"
+                      value={normalizeBackgroundColorForPicker(selectedElement.fill)}
+                      className="editor-color-picker h-9 w-12 shrink-0 cursor-pointer rounded-md bg-transparent"
+                      aria-label="Elegir color de relleno personalizado"
+                      onChange={(event) => updateSelected({ fill: event.target.value })}
+                    />
+                    <span className="text-xs font-medium uppercase text-slate-300">
+                      {selectedElement.fill}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-7 gap-2">
                     {colorSwatches.map((color) => (
                       <button
                         key={color}
                         type="button"
-	                        className="size-7 rounded-full border border-white/20"
+	                        className={`size-7 rounded-full border transition-colors hover:border-primary focus-visible:border-ring ${
+                          selectedElement.fill.toLowerCase() === color.toLowerCase()
+                            ? "border-primary"
+                            : "border-white/20"
+                        }`}
                         style={{ backgroundColor: color }}
                         aria-label={`Usar color ${color}`}
+                        aria-pressed={selectedElement.fill.toLowerCase() === color.toLowerCase()}
                         onClick={() => updateSelected({ fill: color })}
                       />
                     ))}
                   </div>
                 </div>
+              ) : null}
+
+              {selectedShapeElement ? (
+                <>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="shape-stroke-color">Borde</Label>
+                      <span className="text-xs text-slate-400">
+                        {selectedShapeElement.strokeWidth === 0
+                          ? "Sin borde"
+                          : `${Math.round(selectedShapeElement.strokeWidth)}px`}
+                      </span>
+                    </div>
+                    <div className="editor-custom-element-color flex items-center gap-3 rounded-md border border-white/10 bg-[#181c20] p-2">
+                      <input
+                        id="shape-stroke-color"
+                        type="color"
+                        value={normalizeBackgroundColorForPicker(selectedShapeElement.stroke, "#0f172a")}
+                        className="editor-color-picker h-9 w-12 shrink-0 cursor-pointer rounded-md bg-transparent"
+                        aria-label="Elegir color de borde personalizado"
+                        onChange={(event) => updateSelectedShapeStyle({ stroke: event.target.value })}
+                      />
+                      <span className="text-xs font-medium uppercase text-slate-300">
+                        {selectedShapeElement.stroke}
+                      </span>
+                    </div>
+                    <Slider
+                      value={[selectedShapeElement.strokeWidth]}
+                      min={0}
+                      max={200}
+                      step={2}
+                      aria-label="Grosor del borde"
+                      onValueChange={([strokeWidth]) => updateSelectedShapeStyle({ strokeWidth })}
+                    />
+                  </div>
+
+                  {String(selectedShapeElement.shapeType) === "rect" ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label>Radio de esquinas</Label>
+                        <span className="text-xs text-slate-400">
+                          {Math.round(selectedShapeElement.cornerRadius)}px
+                        </span>
+                      </div>
+                      <Slider
+                        value={[selectedShapeElement.cornerRadius]}
+                        min={0}
+                        max={Math.min(selectedShapeElement.width, selectedShapeElement.height) / 2}
+                        step={4}
+                        aria-label="Radio de las esquinas"
+                        onValueChange={([cornerRadius]) => updateSelectedShapeStyle({ cornerRadius })}
+                      />
+                    </div>
+                  ) : null}
+                </>
               ) : null}
 
               <Separator />

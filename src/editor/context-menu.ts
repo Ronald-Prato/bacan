@@ -1,6 +1,14 @@
 import { findSelectedElements, type CanvasElement, type EditorDocument, type Selection } from "./document"
 
-export const LOCAL_CONTEXT_MENU_ACTION_IDS = ["copy", "paste", "duplicate", "delete", "align", "lock"] as const
+export const LOCAL_CONTEXT_MENU_ACTION_IDS = [
+  "copy",
+  "paste",
+  "duplicate",
+  "position",
+  "delete",
+  "align",
+  "lock",
+] as const
 
 export const OPTIONAL_CONTEXT_MENU_ACTION_IDS = [
   "comment",

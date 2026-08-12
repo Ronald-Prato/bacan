@@ -12,6 +12,7 @@ import {
   createSelectionForElementsInBounds,
   createSelectionForPageElements,
   createShapeElement,
+  getShapeElementDefaultSize,
   createTextElement,
   deleteElements,
   deleteElement,
@@ -28,23 +29,30 @@ import {
   moveElementsByDelta,
   moveElementBackward,
   moveElementForward,
+  moveElementToLayerIndex,
   moveElementToBack,
   moveElementToFront,
   normalizeImageElement,
+  normalizeShapeElement,
   normalizeTextElement,
+  normalizeShapeType,
   pageElementCount,
   selectionIncludesElement,
   toggleElementLocked,
   toggleElementVisibility,
   toggleElementSelection,
   ungroupElements,
+  setPageBackgroundColor,
+  setPageBackgroundImage,
   updateImageCrop,
   updateImageFilters,
   updateImageMask,
+  updateShapeStyle,
   updateTextStyle,
   updateElement,
   type Asset,
 } from "./document"
+import { SHAPE_OPTIONS } from "./shapes"
 
 function idSequence() {
   let index = 0
@@ -74,6 +82,30 @@ describe("editor document model", () => {
     expect(document.pages).toHaveLength(1)
     expect(document.pages[0].name).toBe("Pagina 1")
     expect(document.pages[0].elements).toHaveLength(0)
+  })
+
+  it("creates a plain black text element", () => {
+    const text = createTextElement(() => "text-1")
+
+    expect(text).toMatchObject({
+      id: "text-1",
+      type: "text",
+      text: "Text",
+      fill: "#000000",
+    })
+  })
+
+  it("applies image backgrounds and clears them when a color is selected", () => {
+    const document = createInitialDocument(() => "page-1")
+    const withImage = setPageBackgroundImage(document, "page-1", "/backgrounds/blue-concrete.jpg")
+    const withColor = setPageBackgroundColor(withImage, "page-1", "#123456")
+
+    expect(withImage.pages[0]).toMatchObject({
+      background: "#ffffff",
+      backgroundImage: "/backgrounds/blue-concrete.jpg",
+    })
+    expect(withColor.pages[0].background).toBe("#123456")
+    expect(withColor.pages[0].backgroundImage).toBeUndefined()
   })
 
   it("adds pages below the current page stack", () => {
@@ -166,10 +198,93 @@ describe("editor document model", () => {
 
     expect(shape).toMatchObject({
       id: "shape-1",
-      name: "Triangulo",
+      name: "Triángulo",
+      shapeType: "basic-triangle",
       x: 128,
       y: 96,
+      opacity: 1,
+      strokeWidth: 0,
+      cornerRadius: 0,
     })
+  })
+
+  it("creates every catalog shape with bounded canvas dimensions", () => {
+    for (const option of SHAPE_OPTIONS) {
+      const shape = createShapeElement(option.type, () => option.type, undefined, { width: 900, height: 700 })
+
+      expect(shape.shapeType).toBe(option.type)
+      expect(shape.width).toBeGreaterThan(0)
+      expect(shape.height).toBeGreaterThan(0)
+      expect(shape.width).toBeLessThanOrEqual(900 * 0.44)
+      expect(shape.height).toBeLessThanOrEqual(700 * 0.34)
+      expect(shape.strokeWidth).toBe(option.render.kind === "line" || option.render.kind === "arrow" ? 24 : 0)
+    }
+  })
+
+  it("uses catalog aspect policies when choosing insertion dimensions", () => {
+    const lineSize = getShapeElementDefaultSize("line-solid", { width: 4096, height: 4096 })
+    const circleSize = getShapeElementDefaultSize("basic-circle", { width: 4096, height: 4096 })
+
+    expect(lineSize).toEqual({ width: 720, height: 120 })
+    expect(circleSize).toEqual({ width: 560, height: 560 })
+  })
+
+  it("keeps legacy shape IDs at the creation and normalization boundaries", () => {
+    expect(createShapeElement("rect", () => "legacy-rect").shapeType).toBe("basic-square")
+    expect(createShapeElement("circle", () => "legacy-circle").shapeType).toBe("basic-circle")
+    expect(createShapeElement("triangle", () => "legacy-triangle").shapeType).toBe("basic-triangle")
+    expect(normalizeShapeType("unknown-shape")).toBe("basic-square")
+
+    const legacy = {
+      ...createShapeElement("rect", () => "legacy"),
+      shapeType: "circle",
+    }
+    expect(normalizeShapeElement(legacy).shapeType).toBe("basic-circle")
+  })
+
+  it("updates shape borders and corner radius with bounded values", () => {
+    const nextId = idSequence()
+    const document = createInitialDocument(nextId)
+    const pageId = document.pages[0].id
+    const shape = createShapeElement("rect", nextId)
+    const withShape = addElementToPage(document, pageId, shape)
+
+    const styled = updateShapeStyle(withShape, pageId, shape.id, {
+      stroke: "#123456",
+      strokeWidth: 500,
+      cornerRadius: 500,
+    })
+
+    expect(findElement(styled, { pageId, elementId: shape.id })).toMatchObject({
+      stroke: "#123456",
+      strokeWidth: 200,
+      cornerRadius: shape.height / 2,
+    })
+  })
+
+  it("normalizes older shapes while preserving their visible borders", () => {
+    const legacyShape = {
+      ...createShapeElement("rect", () => "shape-1"),
+      stroke: "#123456",
+      strokeWidth: undefined,
+      cornerRadius: undefined,
+    }
+
+    expect(normalizeShapeElement(legacyShape)).toMatchObject({
+      stroke: "#123456",
+      strokeWidth: 2,
+      cornerRadius: 0,
+    })
+  })
+
+  it("ignores shape style updates for non-shape elements", () => {
+    const nextId = idSequence()
+    const document = createInitialDocument(nextId)
+    const pageId = document.pages[0].id
+    const text = createTextElement(nextId)
+    const withText = addElementToPage(document, pageId, text)
+
+    expect(updateShapeStyle(withText, pageId, text.id, { strokeWidth: 20 })).toEqual(withText)
   })
 
   it("duplicates selected elements with a Canva-like offset", () => {
@@ -423,6 +538,50 @@ describe("editor document model", () => {
       second.id,
       first.id,
     ])
+  })
+
+  it("moves a layer to an arbitrary canonical stack index", () => {
+    const nextId = idSequence()
+    const document = createInitialDocument(nextId)
+    const pageId = document.pages[0].id
+    const first = createShapeElement("rect", nextId)
+    const second = createShapeElement("circle", nextId)
+    const third = createShapeElement("triangle", nextId)
+    const fourth = createTextElement(nextId)
+    const withElements = [first, second, third, fourth].reduce(
+      (currentDocument, element) => addElementToPage(currentDocument, pageId, element),
+      document,
+    )
+
+    const moved = moveElementToLayerIndex(withElements, pageId, fourth.id, 1)
+
+    expect(moved.pages[0].elements.map((element) => element.id)).toEqual([
+      first.id,
+      fourth.id,
+      second.id,
+      third.id,
+    ])
+    expect(findElement(moved, { pageId, elementId: fourth.id })).toBe(fourth)
+  })
+
+  it("clamps arbitrary layer indexes and ignores missing targets", () => {
+    const nextId = idSequence()
+    const document = createInitialDocument(nextId)
+    const pageId = document.pages[0].id
+    const first = createShapeElement("rect", nextId)
+    const second = createShapeElement("circle", nextId)
+    const withElements = [first, second].reduce(
+      (currentDocument, element) => addElementToPage(currentDocument, pageId, element),
+      document,
+    )
+
+    const movedPastFront = moveElementToLayerIndex(withElements, pageId, first.id, 99)
+    const movedPastBack = moveElementToLayerIndex(withElements, pageId, second.id, -99)
+
+    expect(movedPastFront.pages[0].elements.map((element) => element.id)).toEqual([second.id, first.id])
+    expect(movedPastBack.pages[0].elements.map((element) => element.id)).toEqual([second.id, first.id])
+    expect(moveElementToLayerIndex(withElements, pageId, "missing", 1)).toEqual(withElements)
+    expect(moveElementToLayerIndex(withElements, "missing", first.id, 1)).toEqual(withElements)
   })
 
   it("reports an element position in the layer stack", () => {

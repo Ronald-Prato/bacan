@@ -64,6 +64,7 @@ describe("context menu action model", () => {
       "copy",
       "paste",
       "duplicate",
+      "position",
       "delete",
       "align",
       "lock",
@@ -75,7 +76,7 @@ describe("context menu action model", () => {
       "translate",
       "create-component",
     ])
-    for (const id of ["copy", "duplicate", "delete", "align", "lock"] as const) {
+    for (const id of ["copy", "duplicate", "position", "delete", "align", "lock"] as const) {
       expect(actions[id]).toMatchObject({
         source: "local",
         state: "available",
@@ -193,7 +194,7 @@ describe("context menu action model", () => {
       }),
     )
 
-    for (const id of ["copy", "duplicate", "delete", "align", "lock"] as const) {
+    for (const id of ["copy", "duplicate", "position", "delete", "align", "lock"] as const) {
       expect(actions[id].state).toBe("available")
     }
     expect(actions.comment).toMatchObject({ state: "hidden", visible: false, enabled: false })

@@ -139,7 +139,7 @@ export function EditorToolRail<TToolId extends string>({
   tools,
 }: EditorToolRailProps<TToolId>) {
   return (
-    <aside className="editor-toolrail relative z-20 border-r border-white/8 bg-[#0b0e10] py-3">
+    <aside className="editor-toolrail relative z-20 min-h-0 overflow-y-auto border-r border-white/8 bg-[#0b0e10] py-3">
       <nav className="flex flex-col items-center gap-1 px-2">
         {tools.map((tool) => {
           const Icon = tool.icon
@@ -178,22 +178,28 @@ export function EditorToolRail<TToolId extends string>({
 type EditorContextSidebarProps = {
   badgeLabel?: string
   children: ReactNode
+  immersive?: boolean
   title: string
 }
 
-export function EditorContextSidebar({ badgeLabel, children, title }: EditorContextSidebarProps) {
+export function EditorContextSidebar({ badgeLabel, children, immersive = false, title }: EditorContextSidebarProps) {
   return (
-    <aside className="editor-context-sidebar hidden overflow-y-auto border-r border-white/8 bg-[#121619] p-4 lg:block">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9cff6d]">Panel</p>
-          <h2 className="text-sm font-bold text-[#f6f7ef]">{title}</h2>
+    <aside className={cn(
+      "editor-context-sidebar hidden min-h-0 min-w-0 flex-col border-r border-white/8 bg-[#121619] lg:flex",
+      immersive ? "h-full overflow-hidden p-0" : "overflow-x-hidden overflow-y-auto p-4",
+    )}>
+      {!immersive ? (
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9cff6d]">Panel</p>
+            <h2 className="text-sm font-bold text-[#f6f7ef]">{title}</h2>
+          </div>
+          {badgeLabel ? (
+            <Badge className="border-white/10 bg-white/[0.06] text-[#cfd7d2]">{badgeLabel}</Badge>
+          ) : null}
         </div>
-        {badgeLabel ? (
-          <Badge className="border-white/10 bg-white/[0.06] text-[#cfd7d2]">{badgeLabel}</Badge>
-        ) : null}
-      </div>
-      <div className="space-y-4">{children}</div>
+      ) : null}
+      <div className={immersive ? "h-full min-h-0 min-w-0 flex-1" : "min-w-0 space-y-4"}>{children}</div>
     </aside>
   )
 }
@@ -216,7 +222,7 @@ export function EditorWorkspace({
   viewportRef,
 }: EditorWorkspaceProps) {
   return (
-    <section className="editor-workspace flex min-w-0 flex-col bg-[#0d1012]">
+    <section className="editor-workspace flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#0d1012]">
       <div className="editor-workspace-toolbar flex h-12 items-center justify-between border-b border-white/8 bg-[#101417] px-4">
         <div className="flex min-w-0 items-center gap-3 text-xs font-semibold text-[#8e9995]">
           {stats.map((stat) => (
@@ -231,7 +237,7 @@ export function EditorWorkspace({
 
       <div
         ref={viewportRef}
-        className="editor-canvas-viewport relative flex flex-1 justify-start overflow-auto bg-[radial-gradient(circle_at_30%_0%,rgba(156,255,109,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.025)_0_1px,transparent_1px)] bg-[length:auto,24px_24px] px-4 py-8"
+        className="editor-canvas-viewport relative flex min-h-0 flex-1 justify-start overflow-auto bg-[radial-gradient(circle_at_30%_0%,rgba(156,255,109,0.08),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.025)_0_1px,transparent_1px)] bg-[length:auto,24px_24px] px-4 py-8"
       >
         {children}
       </div>

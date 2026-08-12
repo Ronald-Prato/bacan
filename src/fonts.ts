@@ -1,0 +1,7 @@
+import "@fontsource/bebas-neue/latin-400.css"
+import "@fontsource/bungee/latin-400.css"
+import "@fontsource/caveat/latin-400.css"
+import "@fontsource/caveat/latin-700.css"
+import "@fontsource/dm-serif-display/latin-400.css"
+import "@fontsource/oswald/latin-400.css"
+import "@fontsource/oswald/latin-700.css"

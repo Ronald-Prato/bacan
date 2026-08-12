@@ -1,3 +1,14 @@
+import {
+  getShapeDefaultSize,
+  getShapeOption,
+  isShapeType as isCatalogShapeType,
+  SHAPE_OPTIONS,
+} from "./shapes"
+import type { ShapeType } from "./shapes"
+
+export { SHAPE_OPTIONS }
+export type { ShapeType }
+
 export const CANVAS_SIZE = {
   width: 4096,
   height: 4096,
@@ -20,6 +31,11 @@ const DEFAULT_TEXT_SIZE = {
 
 export const FONT_OPTIONS = [
   "Geist Variable",
+  "Bebas Neue",
+  "Bungee",
+  "Caveat",
+  "DM Serif Display",
+  "Oswald",
   "Inter",
   "Arial",
   "Georgia",
@@ -28,14 +44,8 @@ export const FONT_OPTIONS = [
   "Verdana",
 ] as const
 
-export const SHAPE_OPTIONS = [
-  { type: "rect", label: "Cuadrado", fill: "#8b5cf6" },
-  { type: "circle", label: "Circulo", fill: "#14b8a6" },
-  { type: "triangle", label: "Triangulo", fill: "#f59e0b" },
-] as const
-
 export type FontFamily = (typeof FONT_OPTIONS)[number]
-export type ShapeType = (typeof SHAPE_OPTIONS)[number]["type"]
+export type LegacyShapeType = "rect" | "circle" | "triangle"
 export type TextAlign = "left" | "center" | "right"
 export type TextFontWeight = "normal" | "bold"
 export type TextFontStyle = "normal" | "italic"
@@ -117,6 +127,13 @@ export type ShapeElement = BaseElement & {
   shapeType: ShapeType
   fill: string
   stroke: string
+  strokeWidth: number
+  cornerRadius: number
+}
+type ShapeElementWithOptionalStyle = Omit<ShapeElement, "shapeType" | "strokeWidth" | "cornerRadius"> & {
+  shapeType: unknown
+  strokeWidth?: number
+  cornerRadius?: number
 }
 
 export type CanvasElement = ImageElement | TextElement | ShapeElement
@@ -125,6 +142,7 @@ export type Page = {
   id: string
   name: string
   background: string
+  backgroundImage?: string
   elements: CanvasElement[]
 }
 
@@ -178,6 +196,29 @@ export function createInitialDocument(createId: IdFactory = fallbackIdFactory): 
     size: CANVAS_SIZE,
     pages: [createPage(1, createId)],
   }
+}
+
+export function setPageBackgroundColor(
+  document: EditorDocument,
+  pageId: string,
+  background: string,
+): EditorDocument {
+  return updatePage(document, pageId, (page) => ({
+    ...page,
+    background,
+    backgroundImage: undefined,
+  }))
+}
+
+export function setPageBackgroundImage(
+  document: EditorDocument,
+  pageId: string,
+  backgroundImage: string,
+): EditorDocument {
+  return updatePage(document, pageId, (page) => ({
+    ...page,
+    backgroundImage,
+  }))
 }
 
 export function createImageElement({
@@ -239,7 +280,7 @@ export function createTextElement(
     visible: true,
     fontFamily: "Geist Variable",
     fontSize: 184,
-    fill: "#111827",
+    fill: "#000000",
     align: "center",
     fontWeight: "normal",
     fontStyle: "normal",
@@ -250,23 +291,26 @@ export function createTextElement(
 }
 
 export function createShapeElement(
-  shapeType: ShapeType,
+  shapeType: ShapeType | LegacyShapeType,
   createId: IdFactory = fallbackIdFactory,
   position?: { x: number; y: number },
   canvasSize: DocumentSize = CANVAS_SIZE,
 ): ShapeElement {
-  const preset = SHAPE_OPTIONS.find((shape) => shape.type === shapeType) ?? SHAPE_OPTIONS[0]
-  const width = Math.min(DEFAULT_SHAPE_SIZE.width, canvasSize.width * 0.44)
-  const height = Math.min(DEFAULT_SHAPE_SIZE.height, canvasSize.height * 0.34)
+  const canonicalShapeType = normalizeShapeType(shapeType)
+  const preset = getShapeOption(canonicalShapeType)
+  const size = getShapeElementDefaultSize(canonicalShapeType, canvasSize)
+  const width = size.width
+  const height = size.height
   const resolvedPosition = position ?? {
     x: Math.round((canvasSize.width - width) / 2),
     y: Math.round((canvasSize.height - height) / 2),
   }
+  const isStrokeShape = preset.render.kind === "line" || preset.render.kind === "arrow"
 
   return {
     id: createId(),
     type: "shape",
-    shapeType,
+    shapeType: canonicalShapeType,
     name: preset.label,
     x: resolvedPosition.x,
     y: resolvedPosition.y,
@@ -277,8 +321,49 @@ export function createShapeElement(
     locked: false,
     visible: true,
     fill: preset.fill,
-    stroke: "#0f172a",
+    stroke: isStrokeShape ? preset.fill : "#0f172a",
+    strokeWidth: isStrokeShape ? 24 : 0,
+    cornerRadius: 0,
   }
+}
+
+export function getShapeElementDefaultSize(
+  shapeType: ShapeType | LegacyShapeType,
+  canvasSize: DocumentSize = CANVAS_SIZE,
+): DocumentSize {
+  const canonicalShapeType = normalizeShapeType(shapeType)
+
+  return getShapeDefaultSize(canonicalShapeType, {
+    width: Math.min(DEFAULT_SHAPE_SIZE.width, canvasSize.width * 0.44),
+    height: Math.min(DEFAULT_SHAPE_SIZE.height, canvasSize.height * 0.34),
+  })
+}
+
+export function normalizeShapeElement(element: ShapeElementWithOptionalStyle): ShapeElement {
+  const legacyStrokeWidth = element.stroke && element.stroke !== "transparent" ? 2 : 0
+
+  return {
+    ...element,
+    shapeType: normalizeShapeType(element.shapeType),
+    strokeWidth: clamp(element.strokeWidth ?? legacyStrokeWidth, 0, 200),
+    cornerRadius: clamp(element.cornerRadius ?? 0, 0, Math.min(element.width, element.height) / 2),
+  }
+}
+
+export function normalizeShapeType(value: unknown): ShapeType {
+  if (value === "rect") {
+    return "basic-square"
+  }
+
+  if (value === "circle") {
+    return "basic-circle"
+  }
+
+  if (value === "triangle") {
+    return "basic-triangle"
+  }
+
+  return isCatalogShapeType(value) ? value : "basic-square"
 }
 
 export function normalizeTextElement(element: TextElementWithOptionalStyle): TextElement {
@@ -787,6 +872,15 @@ export function moveElementToBack(
   return moveElementToIndex(document, pageId, elementId, 0)
 }
 
+export function moveElementToLayerIndex(
+  document: EditorDocument,
+  pageId: string,
+  elementId: string,
+  targetIndex: number,
+): EditorDocument {
+  return moveElementToIndex(document, pageId, elementId, targetIndex)
+}
+
 export function toggleElementLocked(
   document: EditorDocument,
   pageId: string,
@@ -1017,6 +1111,33 @@ export function updateTextStyle(
         letterSpacing:
           changes.letterSpacing === undefined ? textElement.letterSpacing : clamp(changes.letterSpacing, -50, 200),
       }
+    }),
+  }))
+
+  return didUpdate ? nextDocument : document
+}
+
+export function updateShapeStyle(
+  document: EditorDocument,
+  pageId: string,
+  elementId: string,
+  changes: Partial<Pick<ShapeElement, "stroke" | "strokeWidth" | "cornerRadius">>,
+): EditorDocument {
+  let didUpdate = false
+  const nextDocument = updatePage(document, pageId, (page) => ({
+    ...page,
+    elements: page.elements.map((element) => {
+      if (element.id !== elementId || element.type !== "shape") {
+        return element
+      }
+
+      didUpdate = true
+      const shapeElement = normalizeShapeElement(element)
+
+      return normalizeShapeElement({
+        ...shapeElement,
+        ...changes,
+      })
     }),
   }))
 

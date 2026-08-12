@@ -104,7 +104,7 @@ describe("design templates and formats", () => {
     expect(resized.size).toEqual({ width: 1920, height: 1080 })
     expect(resizedShape.x).toBe(480)
     expect(resizedShape.y).toBe(540)
-    expect(resizedShape.width).toBeCloseTo(337.5)
+    expect(resizedShape.width).toBeCloseTo(262.5)
     expect(resizedShape.height).toBeCloseTo(147.65625)
   })
 

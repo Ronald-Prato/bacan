@@ -8,7 +8,7 @@ function element(overrides: Partial<CanvasElement> & Pick<CanvasElement, "id">):
     id: overrides.id,
     type: "shape",
     name: "Forma",
-    shapeType: "rect",
+    shapeType: "basic-square",
     x: overrides.x ?? 0,
     y: overrides.y ?? 0,
     width: overrides.width ?? 100,
@@ -18,6 +18,8 @@ function element(overrides: Partial<CanvasElement> & Pick<CanvasElement, "id">):
     locked: overrides.locked ?? false,
     fill: "#000000",
     stroke: "#ffffff",
+    strokeWidth: 2,
+    cornerRadius: 0,
   }
 }
 
