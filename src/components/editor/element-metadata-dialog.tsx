@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ChangeEvent, type KeyboardEvent } from "react"
 
 import { Button } from "@/components/ui/button"
+import { useI18n } from "@/i18n/i18n-context"
 
 export function ElementMetadataDialog({
   description,
@@ -21,6 +22,7 @@ export function ElementMetadataDialog({
   title: string
   value: string
 }) {
+  const { tx } = useI18n()
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
   const dialogRef = useRef<HTMLFormElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
@@ -105,8 +107,8 @@ export function ElementMetadataDialog({
           )}
         </label>
         <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
-          <Button type="submit">Guardar</Button>
+          <Button type="button" variant="outline" onClick={onCancel}>{tx("Cancelar")}</Button>
+          <Button type="submit">{tx("Guardar")}</Button>
         </div>
       </form>
     </div>

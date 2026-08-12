@@ -1,12 +1,13 @@
 import { StrictMode } from 'react'
-import { ConvexProvider, ConvexReactClient } from 'convex/react'
 import { createRoot } from 'react-dom/client'
 import './fonts'
 import './index.css'
 import App from './App.tsx'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { AuthProviders } from '@/auth/auth'
+import { I18nProvider } from '@/i18n/i18n-context'
+import { ProductionVersionToast } from '@/components/production-version-toast'
 
-const convexUrl = import.meta.env.VITE_CONVEX_URL
 const app = (
   <TooltipProvider>
     <App />
@@ -15,6 +16,9 @@ const app = (
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {convexUrl ? <ConvexProvider client={new ConvexReactClient(convexUrl)}>{app}</ConvexProvider> : app}
+    <I18nProvider>
+      <AuthProviders>{app}</AuthProviders>
+      <ProductionVersionToast />
+    </I18nProvider>
   </StrictMode>,
 )

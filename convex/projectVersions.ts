@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 
 import { mutation, query } from "./_generated/server"
+import { requireOwnedProject, requireUserId } from "./auth"
 
 function countCanvasElements(canvas: unknown) {
   const candidate = canvas as { pages?: { elements?: unknown[] }[] } | null
@@ -27,6 +28,7 @@ export const list = query({
     projectId: v.id("projects"),
   },
   handler: async (ctx, args) => {
+    await requireOwnedProject(ctx, args.projectId)
     const versions = await ctx.db
       .query("projectVersions")
       .withIndex("by_projectId_and_createdAt", (q) => q.eq("projectId", args.projectId))
@@ -49,7 +51,10 @@ export const get = query({
     id: v.id("projectVersions"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id)
+    const ownerId = await requireUserId(ctx)
+    const version = await ctx.db.get(args.id)
+
+    return version?.ownerId === ownerId ? version : null
   },
 })
 
@@ -60,15 +65,12 @@ export const create = mutation({
     canvas: v.any(),
   },
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId)
-
-    if (!project) {
-      throw new Error("Project not found")
-    }
+    const { ownerId } = await requireOwnedProject(ctx, args.projectId)
 
     const counts = countCanvasElements(args.canvas)
 
     return await ctx.db.insert("projectVersions", {
+      ownerId,
       projectId: args.projectId,
       label: args.label,
       canvas: args.canvas,

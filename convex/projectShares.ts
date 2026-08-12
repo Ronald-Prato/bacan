@@ -1,6 +1,7 @@
 import { v } from "convex/values"
 
 import { mutation, query } from "./_generated/server"
+import { requireOwnedProject, requireUserId } from "./auth"
 
 const accessValidator = v.union(v.literal("view"), v.literal("comment"), v.literal("edit"))
 
@@ -9,6 +10,7 @@ export const list = query({
     projectId: v.id("projects"),
   },
   handler: async (ctx, args) => {
+    await requireOwnedProject(ctx, args.projectId)
     return await ctx.db
       .query("projectShares")
       .withIndex("by_projectId_and_createdAt", (q) => q.eq("projectId", args.projectId))
@@ -22,18 +24,19 @@ export const getByToken = query({
     token: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireUserId(ctx)
     const share = await ctx.db
       .query("projectShares")
       .withIndex("by_token", (q) => q.eq("token", args.token.trim()))
       .first()
 
-    if (!share || share.revokedAt !== undefined) {
+    if (!share || !share.ownerId || share.revokedAt !== undefined) {
       return null
     }
 
     const project = await ctx.db.get(share.projectId)
 
-    if (!project) {
+    if (!project || project.ownerId !== share.ownerId) {
       return null
     }
 
@@ -51,16 +54,11 @@ export const create = mutation({
     token: v.string(),
   },
   handler: async (ctx, args) => {
+    const { ownerId } = await requireOwnedProject(ctx, args.projectId)
     const token = args.token.trim()
 
     if (!token) {
       throw new Error("Share token is required")
-    }
-
-    const project = await ctx.db.get(args.projectId)
-
-    if (!project) {
-      throw new Error("Project not found")
     }
 
     const existingShare = await ctx.db
@@ -73,6 +71,7 @@ export const create = mutation({
     }
 
     return await ctx.db.insert("projectShares", {
+      ownerId,
       projectId: args.projectId,
       access: args.access,
       token,
@@ -86,6 +85,13 @@ export const revoke = mutation({
     id: v.id("projectShares"),
   },
   handler: async (ctx, args) => {
+    const share = await ctx.db.get(args.id)
+
+    if (!share) {
+      throw new Error("Share not found")
+    }
+
+    await requireOwnedProject(ctx, share.projectId)
     await ctx.db.patch(args.id, {
       revokedAt: Date.now(),
     })

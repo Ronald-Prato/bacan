@@ -1,12 +1,15 @@
 import { v } from "convex/values"
 
 import { mutation, query } from "./_generated/server"
+import { requireOwnedProject, requireUserIdentity } from "./auth"
 
 export const list = query({
   args: {
     projectId: v.id("projects"),
   },
   handler: async (ctx, args) => {
+    await requireOwnedProject(ctx, args.projectId)
+
     return await ctx.db
       .query("comments")
       .withIndex("by_projectId_and_createdAt", (q) => q.eq("projectId", args.projectId))
@@ -24,6 +27,8 @@ export const create = mutation({
     elementId: v.union(v.string(), v.null()),
   },
   handler: async (ctx, args) => {
+    const { ownerId } = await requireOwnedProject(ctx, args.projectId)
+    const identity = await requireUserIdentity(ctx)
     const body = args.body.trim()
 
     if (!body) {
@@ -31,9 +36,10 @@ export const create = mutation({
     }
 
     return await ctx.db.insert("comments", {
+      ownerId,
       projectId: args.projectId,
       body,
-      authorName: args.authorName.trim() || "Colaborador",
+      authorName: identity.name?.trim() || identity.email?.trim() || args.authorName.trim() || "Colaborador",
       pageId: args.pageId,
       elementId: args.elementId,
       createdAt: Date.now(),
