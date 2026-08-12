@@ -1,15 +1,380 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import type { LucideIcon } from "lucide-react"
+import { ChevronRight, Crown, type LucideIcon } from "lucide-react"
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 
-import { cn } from "@/lib/utils"
-
+/**
+ * Existing item objects remain valid. Optional fields add shortcuts, premium
+ * markers, and nested menus without requiring changes at existing call sites.
+ */
 export type CanvasContextMenuItem = {
+  id?: string
   label: string
   icon: LucideIcon
-  onSelect: () => void
+  onSelect?: () => void
   disabled?: boolean
   destructive?: boolean
   separatorBefore?: boolean
+  shortcut?: string
+  premium?: boolean
+  submenu?: CanvasContextMenuEntry[]
+}
+
+export type CanvasContextMenuGroup = {
+  type: "group"
+  id?: string
+  label?: string
+  separatorBefore?: boolean
+  items: CanvasContextMenuEntry[]
+}
+
+export type CanvasContextMenuSeparator = {
+  type: "separator"
+  id?: string
+}
+
+export type CanvasContextMenuEntry = CanvasContextMenuItem | CanvasContextMenuGroup | CanvasContextMenuSeparator
+
+type CanvasContextMenuSurfaceProps = {
+  entries: CanvasContextMenuEntry[]
+  menuId: string
+  ariaLabel?: string
+  autoFocus?: boolean
+  focusRequest?: number
+  onClose: () => void
+  onRequestClose?: () => void
+}
+
+function isCanvasContextMenuGroup(entry: CanvasContextMenuEntry): entry is CanvasContextMenuGroup {
+  return "type" in entry && entry.type === "group"
+}
+
+function isCanvasContextMenuSeparator(entry: CanvasContextMenuEntry): entry is CanvasContextMenuSeparator {
+  return "type" in entry && entry.type === "separator"
+}
+
+function getSelectableItems(entries: CanvasContextMenuEntry[]): CanvasContextMenuItem[] {
+  return entries.flatMap((entry) => {
+    if (isCanvasContextMenuGroup(entry)) {
+      return getSelectableItems(entry.items)
+    }
+
+    return isCanvasContextMenuSeparator(entry) ? [] : [entry]
+  })
+}
+
+function findEnabledItem(items: CanvasContextMenuItem[], start: number, direction: 1 | -1) {
+  if (items.length === 0) {
+    return -1
+  }
+
+  for (let offset = 1; offset <= items.length; offset += 1) {
+    const index = (start + direction * offset + items.length) % items.length
+
+    if (!items[index].disabled) {
+      return index
+    }
+  }
+
+  return -1
+}
+
+function getEntryKey(entry: CanvasContextMenuEntry, index: number) {
+  if (isCanvasContextMenuSeparator(entry)) {
+    return `separator-${entry.id ?? index}`
+  }
+
+  if (isCanvasContextMenuGroup(entry)) {
+    return `group-${entry.id ?? entry.label ?? index}`
+  }
+
+  return `item-${entry.id ?? entry.label}-${index}`
+}
+
+function hasSeparatorBefore(entry: CanvasContextMenuItem | CanvasContextMenuGroup) {
+  return entry.separatorBefore === true
+}
+
+function MenuItem({
+  item,
+  itemIndex,
+  isActive,
+  isSubmenuOpen,
+  onClose,
+  onCloseSubmenu,
+  onOpenSubmenu,
+  onRequestClose,
+  onNavigate,
+  setItemRef,
+}: {
+  item: CanvasContextMenuItem
+  itemIndex: number
+  isActive: boolean
+  isSubmenuOpen: boolean
+  onClose: () => void
+  onCloseSubmenu: (itemIndex: number) => void
+  onOpenSubmenu: (itemIndex: number, focusFirstItem: boolean) => void
+  onRequestClose?: () => void
+  onNavigate: (event: ReactKeyboardEvent<HTMLButtonElement>, itemIndex: number) => void
+  setItemRef: (itemIndex: number, element: HTMLButtonElement | null) => void
+}) {
+  const [focusRequest, setFocusRequest] = useState(0)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const submenuId = useId()
+  const submenuEntries = item.submenu ?? []
+  const hasSubmenu = submenuEntries.length > 0
+  const Icon = item.icon
+
+  const openSubmenu = (focusFirstItem: boolean) => {
+    if (item.disabled || !hasSubmenu) {
+      return
+    }
+
+    onOpenSubmenu(itemIndex, focusFirstItem)
+
+    if (focusFirstItem) {
+      setFocusRequest((request) => request + 1)
+    }
+  }
+
+  const closeSubmenuAndFocusTrigger = () => {
+    onCloseSubmenu(itemIndex)
+    triggerRef.current?.focus()
+  }
+
+  return (
+    <div
+      className="editor-canvas-context-menu__item-container"
+      onMouseEnter={() => openSubmenu(false)}
+      onMouseLeave={() => onCloseSubmenu(itemIndex)}
+    >
+      <button
+        ref={(element) => {
+          triggerRef.current = element
+          setItemRef(itemIndex, element)
+        }}
+        type="button"
+        role="menuitem"
+        tabIndex={item.disabled || !isActive ? -1 : 0}
+        disabled={item.disabled}
+        aria-disabled={item.disabled || undefined}
+        aria-haspopup={hasSubmenu ? "menu" : undefined}
+        aria-expanded={hasSubmenu ? isSubmenuOpen : undefined}
+        aria-controls={hasSubmenu && isSubmenuOpen ? submenuId : undefined}
+        data-destructive={item.destructive || undefined}
+        data-has-submenu={hasSubmenu || undefined}
+        data-highlighted={isActive && !item.disabled ? "true" : undefined}
+        className="editor-canvas-context-menu__item"
+        onKeyDown={(event) => {
+          if (event.key === "ArrowRight" && hasSubmenu) {
+            event.preventDefault()
+            event.stopPropagation()
+            openSubmenu(true)
+            return
+          }
+
+          if ((event.key === "ArrowLeft" || event.key === "Escape") && onRequestClose) {
+            event.preventDefault()
+            event.stopPropagation()
+            onRequestClose()
+            return
+          }
+
+          onNavigate(event, itemIndex)
+        }}
+        onClick={() => {
+          if (hasSubmenu) {
+            if (isSubmenuOpen) {
+              closeSubmenuAndFocusTrigger()
+            } else {
+              openSubmenu(true)
+            }
+            return
+          }
+
+          item.onSelect?.()
+          onClose()
+        }}
+      >
+        <Icon className="editor-canvas-context-menu__icon" aria-hidden="true" />
+        <span className="editor-canvas-context-menu__label">{item.label}</span>
+        {item.premium ? (
+          <span className="editor-canvas-context-menu__premium" title="Premium">
+            <Crown className="editor-canvas-context-menu__premium-icon" aria-hidden="true" />
+            <span className="sr-only">Premium</span>
+          </span>
+        ) : null}
+        {item.shortcut ? <kbd className="editor-canvas-context-menu__shortcut">{item.shortcut}</kbd> : null}
+        {hasSubmenu ? (
+          <ChevronRight className="editor-canvas-context-menu__submenu-indicator" aria-hidden="true" />
+        ) : null}
+      </button>
+
+      {hasSubmenu && isSubmenuOpen ? (
+        <div className="editor-canvas-context-menu__submenu-container">
+          <CanvasContextMenuSurface
+            entries={submenuEntries}
+            menuId={submenuId}
+            ariaLabel={item.label}
+            autoFocus={focusRequest > 0}
+            focusRequest={focusRequest}
+            onClose={onClose}
+            onRequestClose={closeSubmenuAndFocusTrigger}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function CanvasContextMenuSurface({
+  entries,
+  menuId,
+  ariaLabel,
+  autoFocus = false,
+  focusRequest = 0,
+  onClose,
+  onRequestClose,
+}: CanvasContextMenuSurfaceProps) {
+  const selectableItems = getSelectableItems(entries)
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const [activeIndex, setActiveIndex] = useState(() => findEnabledItem(selectableItems, -1, 1))
+  const [openSubmenuIndex, setOpenSubmenuIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    setActiveIndex((currentIndex) => {
+      if (currentIndex >= 0 && currentIndex < selectableItems.length && !selectableItems[currentIndex].disabled) {
+        return currentIndex
+      }
+
+      return findEnabledItem(selectableItems, -1, 1)
+    })
+  }, [selectableItems])
+
+  useLayoutEffect(() => {
+    if (!autoFocus) {
+      return
+    }
+
+    const firstEnabledIndex = findEnabledItem(selectableItems, -1, 1)
+
+    if (firstEnabledIndex >= 0) {
+      itemRefs.current[firstEnabledIndex]?.focus()
+    }
+  }, [autoFocus, focusRequest, selectableItems])
+
+  const setItemRef = (itemIndex: number, element: HTMLButtonElement | null) => {
+    itemRefs.current[itemIndex] = element
+  }
+
+  const moveFocus = (itemIndex: number, direction: 1 | -1) => {
+    const nextIndex = findEnabledItem(selectableItems, itemIndex, direction)
+
+    if (nextIndex >= 0) {
+      setOpenSubmenuIndex(null)
+      setActiveIndex(nextIndex)
+      itemRefs.current[nextIndex]?.focus()
+    }
+  }
+
+  const onNavigate = (event: ReactKeyboardEvent<HTMLButtonElement>, itemIndex: number) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault()
+      event.stopPropagation()
+      moveFocus(itemIndex, 1)
+      return
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault()
+      event.stopPropagation()
+      moveFocus(itemIndex, -1)
+      return
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault()
+      event.stopPropagation()
+      const firstEnabledIndex = findEnabledItem(selectableItems, -1, 1)
+
+      if (firstEnabledIndex >= 0) {
+        setOpenSubmenuIndex(null)
+        setActiveIndex(firstEnabledIndex)
+        itemRefs.current[firstEnabledIndex]?.focus()
+      }
+
+      return
+    }
+
+    if (event.key === "End") {
+      event.preventDefault()
+      event.stopPropagation()
+      const lastEnabledIndex = findEnabledItem(selectableItems, 0, -1)
+
+      if (lastEnabledIndex >= 0) {
+        setOpenSubmenuIndex(null)
+        setActiveIndex(lastEnabledIndex)
+        itemRefs.current[lastEnabledIndex]?.focus()
+      }
+    }
+  }
+
+  let itemIndex = 0
+
+  const renderEntry = (entry: CanvasContextMenuEntry, entryIndex: number) => {
+    if (isCanvasContextMenuSeparator(entry)) {
+      return <div key={getEntryKey(entry, entryIndex)} className="editor-canvas-context-menu__separator" role="separator" />
+    }
+
+    if (isCanvasContextMenuGroup(entry)) {
+      const groupLabelId = `${menuId}-group-${entryIndex}`
+
+      return (
+        <div key={getEntryKey(entry, entryIndex)}>
+          {hasSeparatorBefore(entry) ? <div className="editor-canvas-context-menu__separator" role="separator" /> : null}
+          <div
+            role="group"
+            aria-labelledby={entry.label ? groupLabelId : undefined}
+            className="editor-canvas-context-menu__group"
+          >
+            {entry.label ? (
+              <div id={groupLabelId} className="editor-canvas-context-menu__group-label">
+                {entry.label}
+              </div>
+            ) : null}
+            {entry.items.map((groupEntry, groupEntryIndex) => renderEntry(groupEntry, groupEntryIndex))}
+          </div>
+        </div>
+      )
+    }
+
+    const currentItemIndex = itemIndex
+    itemIndex += 1
+
+    return (
+      <div key={getEntryKey(entry, entryIndex)}>
+        {hasSeparatorBefore(entry) ? <div className="editor-canvas-context-menu__separator" role="separator" /> : null}
+        <MenuItem
+          item={entry}
+          itemIndex={currentItemIndex}
+          isActive={activeIndex === currentItemIndex}
+          isSubmenuOpen={openSubmenuIndex === currentItemIndex}
+          onClose={onClose}
+          onCloseSubmenu={(index) => {
+            setOpenSubmenuIndex((currentIndex) => (currentIndex === index ? null : currentIndex))
+          }}
+          onOpenSubmenu={(index) => setOpenSubmenuIndex(index)}
+          onRequestClose={onRequestClose}
+          onNavigate={onNavigate}
+          setItemRef={setItemRef}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div id={menuId} role="menu" aria-label={ariaLabel} aria-orientation="vertical" className="editor-canvas-context-menu__surface">
+      {entries.map(renderEntry)}
+    </div>
+  )
 }
 
 export function CanvasContextMenu({
@@ -18,12 +383,13 @@ export function CanvasContextMenu({
   x,
   y,
 }: {
-  items: CanvasContextMenuItem[]
+  items: CanvasContextMenuEntry[]
   onClose: () => void
   x: number
   y: number
 }) {
   const menuRef = useRef<HTMLDivElement>(null)
+  const menuId = useId()
   const [position, setPosition] = useState({ x, y })
 
   useLayoutEffect(() => {
@@ -52,6 +418,7 @@ export function CanvasContextMenu({
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault()
         onClose()
       }
     }
@@ -72,37 +439,16 @@ export function CanvasContextMenu({
   return (
     <div
       ref={menuRef}
-      role="menu"
-      aria-label="Acciones del elemento"
-      className="editor-canvas-context-menu fixed z-50 min-w-56 rounded-md border border-border bg-popover p-1 text-popover-foreground"
+      className="editor-canvas-context-menu fixed z-50"
       style={{ left: position.x, top: position.y }}
       onContextMenu={(event) => event.preventDefault()}
     >
-      {items.map((item) => {
-        const Icon = item.icon
-
-        return (
-          <div key={item.label}>
-            {item.separatorBefore ? <div className="my-1 h-px bg-border" role="separator" /> : null}
-            <button
-              type="button"
-              role="menuitem"
-              disabled={item.disabled}
-              className={cn(
-                "flex h-9 w-full items-center gap-3 rounded-sm px-2 text-left text-sm outline-none transition-colors hover:bg-accent focus-visible:bg-accent disabled:pointer-events-none disabled:opacity-40",
-                item.destructive && "text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/10",
-              )}
-              onClick={() => {
-                item.onSelect()
-                onClose()
-              }}
-            >
-              <Icon className="size-4" />
-              <span>{item.label}</span>
-            </button>
-          </div>
-        )
-      })}
+      <CanvasContextMenuSurface
+        entries={items}
+        menuId={`${menuId}-root`}
+        ariaLabel="Acciones del elemento"
+        onClose={onClose}
+      />
     </div>
   )
 }

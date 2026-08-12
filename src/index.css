@@ -398,3 +398,142 @@
     transition-duration: 1ms;
   }
 }
+
+.editor-canvas-context-menu {
+  --canvas-menu-background: color-mix(in srgb, currentColor 9%, black);
+  --canvas-menu-foreground: currentColor;
+  --canvas-menu-border: color-mix(in srgb, currentColor 22%, transparent);
+  --canvas-menu-hover: color-mix(in srgb, currentColor 12%, transparent);
+  --canvas-menu-muted: color-mix(in srgb, currentColor 64%, transparent);
+  --canvas-menu-focus: currentColor;
+  --canvas-menu-premium: currentColor;
+  --canvas-menu-danger: currentColor;
+  color: var(--canvas-menu-foreground);
+}
+
+.editor-theme-light .editor-canvas-context-menu {
+  --canvas-menu-background: var(--vacan-background);
+  --canvas-menu-foreground: var(--vacan-foreground);
+  --canvas-menu-border: color-mix(in srgb, var(--vacan-foreground) 24%, var(--vacan-background));
+  --canvas-menu-hover: color-mix(in srgb, var(--vacan-accent) 18%, var(--vacan-background));
+  --canvas-menu-muted: color-mix(in srgb, var(--vacan-foreground) 72%, var(--vacan-background));
+  --canvas-menu-focus: var(--vacan-accent);
+  --canvas-menu-premium: var(--vacan-accent);
+  --canvas-menu-danger: color-mix(in srgb, var(--vacan-foreground) 92%, black);
+}
+
+.editor-canvas-context-menu__surface {
+  min-width: 14rem;
+  border: 1px solid var(--canvas-menu-border);
+  border-radius: var(--radius-md);
+  background: var(--canvas-menu-background);
+  color: var(--canvas-menu-foreground);
+  padding: 0.25rem;
+}
+
+.editor-canvas-context-menu__item-container {
+  position: relative;
+}
+
+.editor-canvas-context-menu__submenu-container {
+  position: absolute;
+  top: -0.25rem;
+  left: 100%;
+  z-index: 10;
+  padding-left: 0.25rem;
+}
+
+.editor-canvas-context-menu__item {
+  display: flex;
+  min-height: 2.25rem;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  padding: 0.5rem;
+  text-align: left;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.editor-canvas-context-menu__item:not(:disabled):is(:hover, [data-highlighted="true"]) {
+  background: var(--canvas-menu-hover);
+}
+
+.editor-canvas-context-menu__item:focus-visible {
+  border-color: var(--canvas-menu-focus);
+  outline: 2px solid var(--canvas-menu-focus);
+  outline-offset: -2px;
+}
+
+.editor-canvas-context-menu__item:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.editor-canvas-context-menu__item[data-destructive="true"] {
+  color: var(--canvas-menu-danger);
+  font-weight: 600;
+}
+
+.editor-canvas-context-menu__icon,
+.editor-canvas-context-menu__submenu-indicator {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+}
+
+.editor-canvas-context-menu__label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-canvas-context-menu__shortcut {
+  margin-left: 0.75rem;
+  color: var(--canvas-menu-muted);
+  font-family: inherit;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  white-space: nowrap;
+}
+
+.editor-canvas-context-menu__premium {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+  color: var(--canvas-menu-premium);
+}
+
+.editor-canvas-context-menu__premium-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.editor-canvas-context-menu__separator {
+  height: 1px;
+  margin: 0.25rem 0;
+  background: var(--canvas-menu-border);
+}
+
+.editor-canvas-context-menu__group {
+  padding: 0.25rem 0;
+}
+
+.editor-canvas-context-menu__group-label {
+  padding: 0.25rem 0.5rem;
+  color: var(--canvas-menu-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1rem;
+  text-transform: uppercase;
+}
