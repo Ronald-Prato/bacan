@@ -7,6 +7,7 @@ import {
   type TextPreset,
   type TextPresetElementDefinition,
 } from "@/editor/text-presets"
+import { useI18n } from "@/i18n/i18n-context"
 
 export type TextLibraryProps = {
   onAddText: () => void
@@ -58,14 +59,15 @@ function PresetCard({
   hintId: string
   onAdd: (presetId: string) => void
 }) {
+  const { tx } = useI18n()
   return (
     <button
       type="button"
       className="text-library__card"
       draggable
       aria-describedby={hintId}
-      aria-label={`Agregar ${preset.label}: ${preset.description}`}
-      title={`${preset.label}. Arrastra o haz doble click`}
+      aria-label={`${tx("Agregar")} ${preset.label}: ${preset.description}`}
+      title={`${preset.label}. ${tx("Arrastra o haz doble click")}`}
       onDragStart={(event) => startPresetDrag(event, preset.id)}
       onDoubleClick={() => onAdd(preset.id)}
       onKeyDown={(event) => addFromKeyboard(event, () => onAdd(preset.id))}
@@ -92,6 +94,7 @@ function BasicPresetButton({
   preset: TextPreset
   onAdd: (presetId: string) => void
 }) {
+  const { tx } = useI18n()
   const element = preset.elements[0]
 
   return (
@@ -99,8 +102,8 @@ function BasicPresetButton({
       type="button"
       className="text-library__basic-button"
       draggable
-      aria-label={`Agregar ${preset.label}`}
-      title={`Agregar ${preset.label}`}
+      aria-label={`${tx("Agregar")} ${preset.label}`}
+      title={`${tx("Agregar")} ${preset.label}`}
       onClick={() => onAdd(preset.id)}
       onDragStart={(event) => startPresetDrag(event, preset.id)}
     >
@@ -116,54 +119,65 @@ function BasicPresetButton({
 }
 
 export function TextLibrary({ onAddText, onAddPreset }: TextLibraryProps) {
+  const { tx } = useI18n()
   const hintId = useId()
   const [liveMessage, setLiveMessage] = useState("")
 
   const addPreset = (presetId: string, label: string) => {
     onAddPreset(presetId)
-    setLiveMessage(`${label} se agregó`)
+    setLiveMessage(`${label} ${tx("se agregó")}`)
   }
 
   const addText = () => {
     onAddText()
-    setLiveMessage("La caja de texto se agregó")
+    setLiveMessage(tx("La caja de texto se agregó"))
   }
+  const localizePreset = (preset: TextPreset): TextPreset => ({
+    ...preset,
+    label: tx(preset.label),
+    description: tx(preset.description),
+    elements: preset.elements.map((element) => ({
+      ...element,
+      name: tx(element.name),
+      text: tx(element.text),
+    })),
+  })
 
   return (
-    <aside className="text-library" aria-label="Biblioteca de texto">
+    <aside className="text-library" aria-label={tx("Biblioteca de texto")}>
       <header className="text-library__header">
-        <p id={hintId} className="text-library__hint">Arrastra o haz doble click</p>
+        <p id={hintId} className="text-library__hint">{tx("Arrastra o haz doble click")}</p>
         <button
           type="button"
           className="text-library__primary-action"
           onClick={addText}
         >
           <Type aria-hidden="true" />
-          Agregar caja de texto
+          {tx("Agregar caja de texto")}
         </button>
       </header>
 
       <div className="text-library__catalog">
         <section className="text-library__quick-section" aria-labelledby="text-library-quick-title">
-          <h2 id="text-library-quick-title">Accesos rápidos</h2>
+          <h2 id="text-library-quick-title">{tx("Accesos rápidos")}</h2>
           <div className="text-library__basic-grid">
-            {BASIC_PRESETS.map((preset) => (
+            {BASIC_PRESETS.map(localizePreset).map((preset) => (
               <BasicPresetButton key={preset.id} preset={preset} onAdd={(id) => addPreset(id, preset.label)} />
             ))}
           </div>
         </section>
         <section className="text-library__section" aria-labelledby="text-library-styles-title">
-          <h2 id="text-library-styles-title">Estilos de texto predeterminados</h2>
+          <h2 id="text-library-styles-title">{tx("Estilos de texto predeterminados")}</h2>
           <div className="text-library__grid">
-            {STYLE_PRESETS.map((preset) => (
+            {STYLE_PRESETS.map(localizePreset).map((preset) => (
               <PresetCard key={preset.id} preset={preset} hintId={hintId} onAdd={(id) => addPreset(id, preset.label)} />
             ))}
           </div>
         </section>
         <section className="text-library__section" aria-labelledby="text-library-combinations-title">
-          <h2 id="text-library-combinations-title">Combinaciones de fuentes</h2>
+          <h2 id="text-library-combinations-title">{tx("Combinaciones de fuentes")}</h2>
           <div className="text-library__grid">
-            {COMBINATION_PRESETS.map((preset) => (
+            {COMBINATION_PRESETS.map(localizePreset).map((preset) => (
               <PresetCard key={preset.id} preset={preset} hintId={hintId} onAdd={(id) => addPreset(id, preset.label)} />
             ))}
           </div>

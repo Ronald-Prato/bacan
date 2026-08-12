@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { type CanvasElement, type Page, type Selection, selectionIncludesElement } from "@/editor/document"
 import { getLayerPreviewOrder, type LayerDropPlacement } from "@/editor/layers"
 import { filterSearchItems } from "@/editor/search"
+import { useI18n } from "@/i18n/i18n-context"
 
 export type LayerMove = "forward" | "backward" | "front" | "back"
 
@@ -30,10 +31,10 @@ type LayersPanelProps = {
   onToggleVisibility: (pageId: string, elementId: string) => void
 }
 
-function readableType(element: CanvasElement) {
-  if (element.type === "image") return "Imagen"
-  if (element.type === "text") return "Texto"
-  return "Forma"
+function readableType(element: CanvasElement, tx: (source: string) => string) {
+  if (element.type === "image") return tx("Imagen")
+  if (element.type === "text") return tx("Texto")
+  return tx("Forma")
 }
 
 function LayerAction({
@@ -76,6 +77,7 @@ export function LayersPanel({
   onToggleLocked,
   onToggleVisibility,
 }: LayersPanelProps) {
+  const { tx } = useI18n()
   const [draggedElementId, setDraggedElementId] = useState<string | null>(null)
   const [previewLayerIds, setPreviewLayerIds] = useState<string[] | null>(null)
   const [announcement, setAnnouncement] = useState("")
@@ -196,26 +198,26 @@ export function LayersPanel({
 
     if (targetIndex !== null) {
       onReorderElement(page.id, draggedElementId, targetIndex)
-      setAnnouncement(`${draggedElement?.name ?? "Capa"} se movió a la posición ${visualIndex + 1}.`)
+      setAnnouncement(`${draggedElement?.name ?? tx("Capa")} ${tx("se movió a la posición")} ${visualIndex + 1}.`)
     }
 
     clearDragState()
   }
 
   if (!page || page.elements.length === 0) {
-    return <div className="editor-layers-panel__empty">Agrega elementos para ver tus capas aquí.</div>
+    return <div className="editor-layers-panel__empty">{tx("Agrega elementos para ver tus capas aquí.")}</div>
   }
 
   return (
-    <div className="editor-layers-panel" aria-label="Orden de capas">
+    <div className="editor-layers-panel" aria-label={tx("Orden de capas")}>
       {searchQuery.trim() ? (
-        <p className="editor-layers-panel__hint">Limpia la búsqueda para cambiar el orden arrastrando.</p>
+        <p className="editor-layers-panel__hint">{tx("Limpia la búsqueda para cambiar el orden arrastrando.")}</p>
       ) : (
-        <p className="editor-layers-panel__hint">Arrastra una capa para cambiar su posición en el diseño.</p>
+        <p className="editor-layers-panel__hint">{tx("Arrastra una capa para cambiar su posición en el diseño.")}</p>
       )}
 
       {filteredLayerItems.length === 0 ? (
-        <div className="editor-layers-panel__empty">No hay capas para esa búsqueda.</div>
+        <div className="editor-layers-panel__empty">{tx("No hay capas para esa búsqueda.")}</div>
       ) : null}
 
       <div
@@ -252,9 +254,9 @@ export function LayersPanel({
                   tabIndex={canDragLayers ? 0 : -1}
                   draggable={canDragLayers}
                   aria-disabled={!canDragLayers}
-                  aria-label={`Reordenar ${element.name}`}
+                  aria-label={`${tx("Reordenar")} ${element.name}`}
                   aria-keyshortcuts="ArrowUp ArrowDown Home End"
-                  title={canDragLayers ? "Arrastrar para reordenar" : "Reordenamiento no disponible"}
+                  title={tx(canDragLayers ? "Arrastrar para reordenar" : "Reordenamiento no disponible")}
                   onKeyDown={(event) => {
                     if (!canDragLayers) return
 
@@ -273,7 +275,7 @@ export function LayersPanel({
 
                     event.preventDefault()
                     onMoveElement(page.id, element.id, keyboardMove)
-                    setAnnouncement(`${element.name} cambió de posición.`)
+                    setAnnouncement(`${element.name} ${tx("cambió de posición.")}`)
                   }}
                   onDragStart={(event) => {
                     if (!canDragLayers) {
@@ -286,7 +288,7 @@ export function LayersPanel({
                     previewLayerIdsRef.current = layerIds
                     setPreviewLayerIds(layerIds)
                     setDraggedElementId(element.id)
-                    setAnnouncement(`Moviendo ${element.name}.`)
+                    setAnnouncement(`${tx("Moviendo")} ${element.name}.`)
                   }}
                   onDragEnd={clearDragState}
                 >
@@ -300,19 +302,19 @@ export function LayersPanel({
                 >
                   <span className="editor-layer-row__name">{element.name}</span>
                   <span className="editor-layer-row__meta">
-                    {readableType(element)}
-                    {element.groupId ? " · agrupado" : ""}
+                    {readableType(element, tx)}
+                    {element.groupId ? ` · ${tx("agrupado")}` : ""}
                   </span>
                 </button>
 
                 <LayerAction
-                  label={isLayerVisible ? `Ocultar ${element.name}` : `Mostrar ${element.name}`}
+                  label={`${tx(isLayerVisible ? "Ocultar" : "Mostrar")} ${element.name}`}
                   onClick={() => onToggleVisibility(page.id, element.id)}
                 >
                   {isLayerVisible ? <Eye /> : <EyeOff />}
                 </LayerAction>
                 <LayerAction
-                  label={element.locked ? `Desbloquear ${element.name}` : `Bloquear ${element.name}`}
+                  label={`${tx(element.locked ? "Desbloquear" : "Bloquear")} ${element.name}`}
                   onClick={() => onToggleLocked(page.id, element.id)}
                 >
                   {element.locked ? <Lock /> : <LockOpen />}
@@ -320,31 +322,31 @@ export function LayersPanel({
               </div>
 
               {isLayerSelected ? (
-                <div className="editor-layer-row__position-actions" aria-label={`Posición de ${element.name}`}>
-                  <span>Posición</span>
+                <div className="editor-layer-row__position-actions" aria-label={`${tx("Posición")} ${element.name}`}>
+                  <span>{tx("Posición")}</span>
                   <LayerAction
-                    label="Traer al frente"
+                    label={tx("Traer al frente")}
                     disabled={isFront}
                     onClick={() => onMoveElement(page.id, element.id, "front")}
                   >
                     <ChevronsUp />
                   </LayerAction>
                   <LayerAction
-                    label="Traer hacia delante"
+                    label={tx("Traer hacia delante")}
                     disabled={isFront}
                     onClick={() => onMoveElement(page.id, element.id, "forward")}
                   >
                     <ChevronUp />
                   </LayerAction>
                   <LayerAction
-                    label="Enviar hacia atrás"
+                    label={tx("Enviar hacia atrás")}
                     disabled={isBack}
                     onClick={() => onMoveElement(page.id, element.id, "backward")}
                   >
                     <ChevronDown />
                   </LayerAction>
                   <LayerAction
-                    label="Enviar al fondo"
+                    label={tx("Enviar al fondo")}
                     disabled={isBack}
                     onClick={() => onMoveElement(page.id, element.id, "back")}
                   >

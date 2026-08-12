@@ -145,8 +145,7 @@ import {
 } from "@/editor/assets"
 import {
   BACKGROUND_IMAGES,
-  filterBackgroundImages,
-  filterBackgroundPalettes,
+  BACKGROUND_PALETTES,
   getBackgroundCoverCrop,
   normalizeBackgroundColorForPicker,
   updateRecentBackgroundIds,
@@ -269,6 +268,8 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useI18n } from "@/i18n/i18n-context"
+import { getLocalizedDesignFormatName } from "@/i18n/i18n"
 import { api } from "../convex/_generated/api"
 import type { Id } from "../convex/_generated/dataModel"
 
@@ -1246,11 +1247,12 @@ function SharedProjectPreview({
   projectName: string
   access: ShareAccess
 }) {
+  const { tx } = useI18n()
   const documentSize = document.size ?? CANVAS_SIZE
   const previewScale = Math.min(760 / Math.max(documentSize.width, documentSize.height), 1)
   const previewWidth = Math.round(documentSize.width * previewScale)
   const previewHeight = Math.round(documentSize.height * previewScale)
-  const accessLabel = SHARE_ACCESS_OPTIONS.find((option) => option.value === access)?.label ?? "Puede ver"
+  const accessLabel = tx(SHARE_ACCESS_OPTIONS.find((option) => option.value === access)?.label ?? "Puede ver")
 
   return (
     <main className="min-h-screen bg-[#0d0e14] text-slate-100">
@@ -1259,7 +1261,7 @@ function SharedProjectPreview({
           <h1 className="truncate text-lg font-bold text-white">{projectName}</h1>
           <p className="text-xs text-slate-400">{accessLabel}</p>
         </div>
-        <Badge className="bg-[#9cff6d]/15 text-[#d8ffba]">Compartido</Badge>
+        <Badge className="bg-[#9cff6d]/15 text-[#d8ffba]">{tx("Compartido")}</Badge>
       </header>
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-10 px-4 py-8">
         {document.pages.map((page, pageIndex) => (
@@ -1291,13 +1293,14 @@ function SharedProjectPreview({
 }
 
 function SharedProjectRoute({ token }: { token: string }) {
+  const { tx } = useI18n()
   const result = useQuery(api.projectShares.getByToken, { token }) as SharedProjectLookup | undefined
 
   if (result === undefined) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#0d0e14] p-6 text-slate-100">
         <div className="rounded-md border border-white/10 bg-[#121619] p-5 text-sm text-slate-300">
-          Cargando proyecto compartido...
+          {tx("Cargando proyecto compartido...")}
         </div>
       </main>
     )
@@ -1307,7 +1310,7 @@ function SharedProjectRoute({ token }: { token: string }) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#0d0e14] p-6 text-slate-100">
         <div className="rounded-md border border-white/10 bg-[#121619] p-5 text-sm text-slate-300">
-          Link no disponible.
+          {tx("Link no disponible.")}
         </div>
       </main>
     )
@@ -1338,6 +1341,7 @@ function EditorApp({
   presencePersistence: PresencePersistence
   sharedTemplatePersistence: SharedTemplatePersistence
 }) {
+  const { locale, tx } = useI18n()
   const [documentHistory, setDocumentHistory] = useState(() =>
     createHistoryState<EditorDocument>(createInitialDocument(createId)),
   )
@@ -1352,7 +1356,7 @@ function EditorApp({
   const [comments, setComments] = useState<EditorComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [commentBody, setCommentBody] = useState("")
-  const [commentAuthor, setCommentAuthor] = useState("Colaborador")
+  const [commentAuthor, setCommentAuthor] = useState(() => tx("Colaborador"))
   const [commentError, setCommentError] = useState("")
   const [shareAccess, setShareAccess] = useState<ShareAccess>("comment")
   const [shareStatus, setShareStatus] = useState("")
@@ -1432,11 +1436,11 @@ function EditorApp({
     try {
       setComments(await commentPersistence.listComments(currentProjectId))
     } catch (error) {
-      setCommentError(error instanceof Error ? error.message : "No se pudieron cargar los comentarios")
+      setCommentError(error instanceof Error ? tx(error.message) : tx("No se pudieron cargar los comentarios"))
     } finally {
       setCommentsLoading(false)
     }
-  }, [commentPersistence, currentProjectId])
+  }, [commentPersistence, currentProjectId, tx])
 
   const setDocument = useCallback((updater: DocumentUpdater) => {
     setDocumentHistory((currentHistory) => {
@@ -1847,7 +1851,7 @@ function EditorApp({
             return
           }
 
-          setAutosaveError(error instanceof Error ? error.message : "No se pudo guardar el proyecto")
+          setAutosaveError(error instanceof Error ? tx(error.message) : tx("No se pudo guardar el proyecto"))
           setAutosaveStatus("error")
         }
       })()
@@ -1857,7 +1861,7 @@ function EditorApp({
       isCancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [createProjectPreviewUrl, currentProjectId, document, persistence])
+  }, [createProjectPreviewUrl, currentProjectId, document, persistence, tx])
 
   const saveCurrentProject = useCallback(async () => {
     if (!persistence.isEnabled) {
@@ -1881,10 +1885,10 @@ function EditorApp({
       lastSavedFingerprintRef.current = createDocumentFingerprint(document)
       setAutosaveStatus("saved")
     } catch (error) {
-      setAutosaveError(error instanceof Error ? error.message : "No se pudo guardar el proyecto")
+      setAutosaveError(error instanceof Error ? tx(error.message) : tx("No se pudo guardar el proyecto"))
       setAutosaveStatus("error")
     }
-  }, [createProjectPreviewUrl, currentProjectId, document, persistence])
+  }, [createProjectPreviewUrl, currentProjectId, document, persistence, tx])
 
   const openProject = useCallback(
     async (projectId: string) => {
@@ -1910,16 +1914,16 @@ function EditorApp({
         lastSavedFingerprintRef.current = createDocumentFingerprint(loadedDocument)
         setAutosaveStatus("saved")
       } catch (error) {
-        setAutosaveError(error instanceof Error ? error.message : "No se pudo abrir el proyecto")
+        setAutosaveError(error instanceof Error ? tx(error.message) : tx("No se pudo abrir el proyecto"))
         setAutosaveStatus("error")
       }
     },
-    [persistence, replaceDocumentHistory],
+    [persistence, replaceDocumentHistory, tx],
   )
 
   const saveCurrentVersion = useCallback(async () => {
     if (!versionPersistence.isEnabled) {
-      setVersionStatus("Conecta Convex para guardar versiones.")
+      setVersionStatus(tx("Conecta Convex para guardar versiones."))
       return
     }
 
@@ -1948,11 +1952,11 @@ function EditorApp({
         }),
       )
       setVersionLabel("")
-      setVersionStatus("Version guardada.")
+      setVersionStatus(tx("Version guardada."))
     } catch (error) {
-      setVersionStatus(error instanceof Error ? error.message : "No se pudo guardar la version.")
+      setVersionStatus(error instanceof Error ? tx(error.message) : tx("No se pudo guardar la version."))
     }
-  }, [createProjectPreviewUrl, currentProjectId, document, persistence, versionLabel, versionPersistence])
+  }, [createProjectPreviewUrl, currentProjectId, document, persistence, tx, versionLabel, versionPersistence])
 
   const restoreProjectVersion = useCallback(
     async (versionId: string) => {
@@ -1972,17 +1976,17 @@ function EditorApp({
         setActivePageId(restoredDocument.pages[0]?.id ?? null)
         setSelection(null)
         setAutosaveStatus(persistence.isEnabled ? "saving" : "local")
-        setVersionStatus("Version restaurada.")
+        setVersionStatus(tx("Version restaurada."))
       } catch (error) {
-        setVersionStatus(error instanceof Error ? error.message : "No se pudo restaurar la version.")
+        setVersionStatus(error instanceof Error ? tx(error.message) : tx("No se pudo restaurar la version."))
       }
     },
-    [persistence.isEnabled, replaceDocumentHistory, versionPersistence],
+    [persistence.isEnabled, replaceDocumentHistory, tx, versionPersistence],
   )
 
   const createShareLink = async () => {
     if (!sharePersistence.isEnabled) {
-      setShareStatus("Convex no esta conectado.")
+      setShareStatus(tx("Convex no esta conectado."))
       return
     }
 
@@ -2006,9 +2010,9 @@ function EditorApp({
         }),
       )
       sharePersistence.selectProject(projectId)
-      setShareStatus("Link creado.")
+      setShareStatus(tx("Link creado."))
     } catch (error) {
-      setShareStatus(error instanceof Error ? error.message : "No se pudo crear el link.")
+      setShareStatus(error instanceof Error ? tx(error.message) : tx("No se pudo crear el link."))
     }
   }
 
@@ -2019,9 +2023,9 @@ function EditorApp({
 
     try {
       await sharePersistence.revokeShare(shareId)
-      setShareStatus("Link revocado.")
+      setShareStatus(tx("Link revocado."))
     } catch (error) {
-      setShareStatus(error instanceof Error ? error.message : "No se pudo revocar el link.")
+      setShareStatus(error instanceof Error ? tx(error.message) : tx("No se pudo revocar el link."))
     }
   }
 
@@ -2168,7 +2172,7 @@ function EditorApp({
 
       addImageAssetToPage(asset, imageSize, pageId)
     } catch (error) {
-      setAssetUploadError(error instanceof Error ? error.message : "No se pudo subir la imagen")
+      setAssetUploadError(error instanceof Error ? tx(error.message) : tx("No se pudo subir la imagen"))
     }
   }
 
@@ -2200,18 +2204,23 @@ function EditorApp({
     if (elements.length === 0) {
       return
     }
+    const localizedElements = elements.map((element) => ({
+      ...element,
+      name: tx(element.name),
+      text: tx(element.text),
+    }))
 
     setDocument((currentDocument) =>
-      elements.reduce(
+      localizedElements.reduce(
         (nextDocument, element) => addElementToPage(nextDocument, pageId, element),
         currentDocument,
       ),
     )
     setActivePageId(pageId)
     setSelection(
-      elements.length === 1
-        ? { pageId, elementId: elements[0].id }
-        : createMultiSelection(pageId, elements.map((element) => element.id)),
+      localizedElements.length === 1
+        ? { pageId, elementId: localizedElements[0].id }
+        : createMultiSelection(pageId, localizedElements.map((element) => element.id)),
     )
   }
 
@@ -2222,7 +2231,8 @@ function EditorApp({
       return
     }
 
-    const element = createTextElement(createId, documentSize)
+    const createdElement = createTextElement(createId, documentSize)
+    const element = { ...createdElement, name: tx(createdElement.name), text: locale === "en" ? "Text" : "Texto" }
     setDocument((currentDocument) => addElementToPage(currentDocument, pageId, element))
     setActivePageId(pageId)
     setSelection({ pageId, elementId: element.id })
@@ -2237,7 +2247,8 @@ function EditorApp({
       return
     }
 
-    const element = createShapeElement(shapeType, createId, position, documentSize)
+    const createdElement = createShapeElement(shapeType, createId, position, documentSize)
+    const element = { ...createdElement, name: tx(createdElement.name) }
     setDocument((currentDocument) => addElementToPage(currentDocument, pageId, element))
     setActivePageId(pageId)
     setSelection({ pageId, elementId: element.id })
@@ -2344,7 +2355,13 @@ function EditorApp({
 
     const result = insertPageAfter(document, pageId, createId)
 
-    setDocument(result.document)
+    const pageNumber = result.document.pages.findIndex((page) => page.id === result.pageId) + 1
+    setDocument({
+      ...result.document,
+      pages: result.document.pages.map((page) => page.id === result.pageId
+        ? { ...page, name: `${tx("Pagina")} ${pageNumber}` }
+        : page),
+    })
     setActivePageId(result.pageId)
     setAnimatingPageId(result.pageId)
     setSelection(null)
@@ -2465,7 +2482,7 @@ function EditorApp({
 
   const submitComment = async () => {
     if (!commentPersistence.isEnabled || !currentProjectId) {
-      setCommentError("Guarda el proyecto antes de comentar.")
+      setCommentError(tx("Guarda el proyecto antes de comentar."))
       return
     }
 
@@ -2477,7 +2494,7 @@ function EditorApp({
     })
 
     if (!draft.body) {
-      setCommentError("Escribe un comentario antes de enviarlo.")
+      setCommentError(tx("Escribe un comentario antes de enviarlo."))
       return
     }
 
@@ -2488,7 +2505,7 @@ function EditorApp({
       setCommentBody("")
       await refreshComments()
     } catch (error) {
-      setCommentError(error instanceof Error ? error.message : "No se pudo crear el comentario")
+      setCommentError(error instanceof Error ? tx(error.message) : tx("No se pudo crear el comentario"))
     }
   }
 
@@ -2740,7 +2757,7 @@ function EditorApp({
     setElementContextMenu(null)
     setIsExporting(true)
     setExportProgress({
-      message: "Preparando las páginas y cargando los recursos del diseño en segundo plano.",
+      message: tx("Preparando las páginas y cargando los recursos del diseño en segundo plano."),
       previewUrl: null,
       progress: 4,
       status: "rendering",
@@ -2755,7 +2772,7 @@ function EditorApp({
         const stage = stageRefs.current[pageId]
 
         if (!stage) {
-          throw new Error("Una página del diseño no está disponible para renderizar")
+          throw new Error(tx("Una página del diseño no está disponible para renderizar"))
         }
 
         const dataUrl = stage.toDataURL({
@@ -2768,7 +2785,7 @@ function EditorApp({
 
         renderedPages.push({ dataUrl, pageId, pageNumber })
         setExportProgress((currentProgress) => ({
-          message: `Renderizando la página ${pageIndex + 1} de ${pageIds.length} a ${options.scale}× en segundo plano.`,
+          message: `${tx("Renderizando la página")} ${pageIndex + 1} ${tx("de")} ${pageIds.length} ${tx("a")} ${options.scale}× ${tx("en segundo plano.")}`,
           previewUrl: currentProgress?.previewUrl ?? dataUrl,
           progress,
           status: "rendering",
@@ -2779,10 +2796,10 @@ function EditorApp({
       const isMultiPageRaster = options.format !== "pdf" && renderedPages.length > 1
       setExportProgress((currentProgress) => ({
         message: options.format === "pdf"
-          ? "Componiendo las páginas renderizadas en un PDF listo para descargar."
+          ? tx("Componiendo las páginas renderizadas en un PDF listo para descargar.")
           : isMultiPageRaster
-            ? "Comprimiendo las imágenes renderizadas en un archivo ZIP."
-            : "Codificando la imagen final y preparando la descarga.",
+            ? tx("Comprimiendo las imágenes renderizadas en un archivo ZIP.")
+            : tx("Codificando la imagen final y preparando la descarga."),
         previewUrl: currentProgress?.previewUrl ?? renderedPages[0]?.dataUrl ?? null,
         progress: 84,
         status: "packaging",
@@ -2825,7 +2842,9 @@ function EditorApp({
       }
 
       setExportProgress((currentProgress) => ({
-        message: `${renderedPages.length === 1 ? "La descarga comenzó automáticamente" : `Se exportaron ${renderedPages.length} páginas y la descarga comenzó automáticamente`}.`,
+        message: renderedPages.length === 1
+          ? tx("La descarga comenzó automáticamente.")
+          : `${tx("Se exportaron")} ${renderedPages.length} ${tx("páginas y la descarga comenzó automáticamente.")}`,
         previewUrl: currentProgress?.previewUrl ?? renderedPages[0]?.dataUrl ?? null,
         progress: 100,
         status: "complete",
@@ -2836,7 +2855,7 @@ function EditorApp({
       }, 6_000)
     } catch (error) {
       setExportProgress((currentProgress) => ({
-        message: error instanceof Error ? error.message : "Ocurrió un error inesperado durante el renderizado.",
+        message: error instanceof Error ? tx(error.message) : tx("Ocurrió un error inesperado durante el renderizado."),
         previewUrl: currentProgress?.previewUrl ?? null,
         progress: 100,
         status: "error",
@@ -2943,7 +2962,7 @@ function EditorApp({
     return () => window.removeEventListener("keydown", handleKeyDown)
   })
 
-  const autosaveLabel =
+  const autosaveLabel = tx(
     autosaveStatus === "local"
       ? "Local"
       : autosaveStatus === "saving"
@@ -2952,10 +2971,20 @@ function EditorApp({
           ? "Abriendo"
           : autosaveStatus === "error"
             ? "Sin guardar"
-            : "Guardado"
+            : "Guardado",
+  )
+  const localizedSidebarTools = useMemo(
+    () => sidebarTools.map((tool) => ({ ...tool, label: tx(tool.label), shortLabel: undefined })),
+    [tx],
+  )
 
   const createBlankFormat = (formatId: DesignFormatId) => {
-    const nextDocument = createBlankDocumentForFormat(formatId, createId)
+    const createdDocument = createBlankDocumentForFormat(formatId, createId)
+    const nextDocument = {
+      ...createdDocument,
+      name: getLocalizedDesignFormatName(locale, formatId, createdDocument.name),
+      pages: createdDocument.pages.map((page, index) => ({ ...page, name: `${tx("Pagina")} ${index + 1}` })),
+    }
 
     replaceDocumentHistory(nextDocument)
     setCurrentProjectId(null)
@@ -2968,7 +2997,12 @@ function EditorApp({
   }
 
   const createBlankCustomSize = (size: CustomDesignSize) => {
-    const nextDocument = createBlankDocumentForSize(size, createId)
+    const createdDocument = createBlankDocumentForSize(size, createId)
+    const nextDocument = {
+      ...createdDocument,
+      name: `${tx("Diseño")} ${createdDocument.size?.width} × ${createdDocument.size?.height} px`,
+      pages: createdDocument.pages.map((page, index) => ({ ...page, name: `${tx("Pagina")} ${index + 1}` })),
+    }
 
     replaceDocumentHistory(nextDocument)
     setCurrentProjectId(null)
@@ -2999,49 +3033,60 @@ function EditorApp({
       panelSearchQuery,
       ["color"],
     ).map((swatch) => swatch.color)
-    const filteredBackgroundPalettes = filterBackgroundPalettes(panelSearchQuery)
+    const localizedBackgroundPalettes = BACKGROUND_PALETTES.map((palette) => ({
+      ...palette,
+      name: tx(palette.name),
+    }))
+    const filteredBackgroundPalettes = filterSearchItems(localizedBackgroundPalettes, panelSearchQuery, [
+      "name",
+      (palette) => palette.colors.join(" "),
+    ])
     const filteredProjects = filterSearchItems(persistence.projects, panelSearchQuery, [
       "name",
       (project) => `${project.pageCount} paginas ${project.elementCount} elementos`,
     ])
-    const filteredDesignFormats = filterSearchItems(DESIGN_FORMATS, panelSearchQuery, [
+    const localizedDesignFormats = DESIGN_FORMATS.map((format) => ({
+      ...format,
+      name: getLocalizedDesignFormatName(locale, format.id, format.name),
+    }))
+    const filteredDesignFormats = filterSearchItems(localizedDesignFormats, panelSearchQuery, [
       "name",
       "category",
       (format) => `${format.size.width} ${format.size.height}`,
     ])
     const toolActions = [
-      { icon: MousePointer2, label: "Seleccionar", onClick: () => setSelection(null), disabled: false },
-      { icon: Undo2, label: "Deshacer", onClick: undoDocument, disabled: !canUndo },
-      { icon: Redo2, label: "Rehacer", onClick: redoDocument, disabled: !canRedo },
-      { icon: Layers3, label: "Agrupar", onClick: groupSelected, disabled: selectedElementIds.length < 2 },
-      { icon: Layers3, label: "Desagrupar", onClick: ungroupSelected, disabled: !selectedElementsHaveGroup },
-      { icon: Layers3, label: "Duplicar", onClick: duplicateSelected, disabled: !hasSelection },
-      { icon: BringToFront, label: "Al frente", onClick: moveSelectedToFront, disabled: !selectedElement },
-      { icon: Layers3, label: "Adelante", onClick: moveSelectedForward, disabled: !selectedElement },
-      { icon: Layers3, label: "Atras", onClick: moveSelectedBackward, disabled: !selectedElement },
-      { icon: Layers3, label: "Al fondo", onClick: moveSelectedToBack, disabled: !selectedElement },
+      { icon: MousePointer2, label: tx("Seleccionar"), onClick: () => setSelection(null), disabled: false },
+      { icon: Undo2, label: tx("Deshacer"), onClick: undoDocument, disabled: !canUndo },
+      { icon: Redo2, label: tx("Rehacer"), onClick: redoDocument, disabled: !canRedo },
+      { icon: Layers3, label: tx("Agrupar"), onClick: groupSelected, disabled: selectedElementIds.length < 2 },
+      { icon: Layers3, label: tx("Desagrupar"), onClick: ungroupSelected, disabled: !selectedElementsHaveGroup },
+      { icon: Layers3, label: tx("Duplicar"), onClick: duplicateSelected, disabled: !hasSelection },
+      { icon: BringToFront, label: tx("Al frente"), onClick: moveSelectedToFront, disabled: !selectedElement },
+      { icon: Layers3, label: tx("Adelante"), onClick: moveSelectedForward, disabled: !selectedElement },
+      { icon: Layers3, label: tx("Atras"), onClick: moveSelectedBackward, disabled: !selectedElement },
+      { icon: Layers3, label: tx("Al fondo"), onClick: moveSelectedToBack, disabled: !selectedElement },
       {
         icon: AlignHorizontalSpaceBetween,
-        label: "Distribuir horizontal",
+        label: tx("Distribuir horizontal"),
         onClick: () => distributeActivePageElements("horizontal"),
         disabled: (activePage?.elements.length ?? 0) < 3,
       },
       {
         icon: AlignVerticalSpaceBetween,
-        label: "Distribuir vertical",
+        label: tx("Distribuir vertical"),
         onClick: () => distributeActivePageElements("vertical"),
         disabled: (activePage?.elements.length ?? 0) < 3,
       },
       {
         icon: Lock,
-        label: allSelectedLocked ? "Desbloquear" : "Bloquear",
+        label: tx(allSelectedLocked ? "Desbloquear" : "Bloquear"),
         onClick: toggleSelectedLocked,
         disabled: !hasSelection,
       },
-      { icon: Trash2, label: "Eliminar", onClick: removeSelected, disabled: !hasSelection },
+      { icon: Trash2, label: tx("Eliminar"), onClick: removeSelected, disabled: !hasSelection },
       {
         icon: Download,
-        label: "Exportar",
+        label: tx("Exportar"),
         onClick: () => void exportDesign(exportOptions),
         disabled: !activePage || isExporting,
       },
@@ -3055,7 +3100,7 @@ function EditorApp({
     if (activeTool === "layers") {
       return (
         <>
-          {renderPanelSearch("Busca capas")}
+          {renderPanelSearch(tx("Busca capas"))}
           <LayersPanel
             page={activePage}
             searchQuery={panelSearchQuery}
@@ -3079,7 +3124,7 @@ function EditorApp({
     if (activeTool === "uploads" || activeTool === "photos") {
       return (
         <>
-          {renderPanelSearch(activeTool === "photos" ? "Busca fotos" : "Busca archivos")}
+          {renderPanelSearch(tx(activeTool === "photos" ? "Busca fotos" : "Busca archivos"))}
           <button
             type="button"
             className="flex h-24 w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[#9cff6d] bg-[#151c18] text-slate-100 transition hover:bg-[#1d2a22]"
@@ -3087,7 +3132,7 @@ function EditorApp({
           >
             <CloudUpload className="size-7" />
             <span className="text-sm font-bold">
-              {assetPersistence.isEnabled ? "Subir a biblioteca" : "Subir imagenes"}
+              {tx(assetPersistence.isEnabled ? "Subir a biblioteca" : "Subir imagenes")}
             </span>
           </button>
           {assetUploadError ? (
@@ -3098,19 +3143,19 @@ function EditorApp({
           <div className="grid max-h-[42vh] grid-cols-2 gap-2 overflow-auto pr-1">
             {assetPersistence.isLoading ? (
               <div className="col-span-2 rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                Cargando biblioteca...
+                {tx("Cargando biblioteca...")}
               </div>
             ) : null}
             {assets.length === 0 ? (
               <div className="col-span-2 rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
                 {assetPersistence.isEnabled
-                  ? "Las imagenes guardadas en Convex apareceran aqui."
-                  : "Las imagenes que subas apareceran aqui."}
+                  ? tx("Las imagenes guardadas en Convex apareceran aqui.")
+                  : tx("Las imagenes que subas apareceran aqui.")}
               </div>
             ) : null}
             {assets.length > 0 && filteredAssets.length === 0 ? (
               <div className="col-span-2 rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                No hay archivos para esa busqueda.
+                {tx("No hay archivos para esa busqueda.")}
               </div>
             ) : null}
             {filteredAssets.map((asset) => (
@@ -3136,18 +3181,25 @@ function EditorApp({
 
     if (activeTool === "background") {
       const activeBackgroundColor = normalizeBackgroundColorForPicker(activePage?.background ?? "#ffffff")
-      const filteredBackgroundImages = filterBackgroundImages(panelSearchQuery)
+      const localizedBackgroundImages = BACKGROUND_IMAGES.map((background) => ({
+        ...background,
+        name: tx(background.name),
+      }))
+      const filteredBackgroundImages = filterSearchItems(localizedBackgroundImages, panelSearchQuery, [
+        "name",
+        (background) => background.keywords.join(" "),
+      ])
       const recentBackgrounds = panelSearchQuery.trim()
         ? []
         : recentBackgroundIds.flatMap((id) => {
-            const background = BACKGROUND_IMAGES.find((candidate) => candidate.id === id)
+            const background = localizedBackgroundImages.find((candidate) => candidate.id === id)
 
             return background ? [background] : []
           })
 
       return (
         <>
-          {renderPanelSearch("Busca fondos")}
+          {renderPanelSearch(tx("Busca fondos"))}
 
           <BackgroundLibrary
             activeColor={activeBackgroundColor}
@@ -3161,7 +3213,7 @@ function EditorApp({
           />
 
           <section className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Paletas</h3>
+            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{tx("Paletas")}</h3>
             <div className="space-y-2">
               {filteredBackgroundPalettes.map((palette) => {
                 const isExpanded = expandedBackgroundPaletteId === palette.id
@@ -3179,7 +3231,7 @@ function EditorApp({
                       onClick={() => setExpandedBackgroundPaletteId(isExpanded ? null : palette.id)}
                     >
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-100">
-                        {palette.name}
+                        {tx(palette.name)}
                       </span>
                       <span className="flex shrink-0 overflow-hidden rounded-sm border border-white/10" aria-hidden="true">
                         {palette.colors.slice(0, 4).map((color) => (
@@ -3235,7 +3287,7 @@ function EditorApp({
     if (activeTool === "projects") {
       return (
         <>
-          {renderPanelSearch("Busca proyectos")}
+          {renderPanelSearch(tx("Busca proyectos"))}
           <div className="grid grid-cols-2 gap-2">
             <Button
               className="border-white/15 bg-transparent text-slate-100 hover:bg-white/10"
@@ -3243,7 +3295,7 @@ function EditorApp({
               onClick={() => createBlankFormat("square-post")}
             >
               <Plus data-icon="inline-start" />
-              Nuevo
+              {tx("Nuevo")}
             </Button>
             <Button
               className="bg-[#9cff6d] text-[#09100d] hover:bg-[#8de85f]"
@@ -3251,7 +3303,7 @@ function EditorApp({
               disabled={!persistence.isEnabled || autosaveStatus === "saving"}
             >
               <CloudUpload data-icon="inline-start" />
-              Guardar
+              {tx("Guardar")}
             </Button>
           </div>
           {!persistence.isEnabled ? (
@@ -3265,10 +3317,10 @@ function EditorApp({
             </div>
           ) : null}
           <section className="space-y-2 rounded-md border border-white/10 bg-[#181c20] p-3">
-            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Versiones</h3>
+            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{tx("Versiones")}</h3>
             <Input
               value={versionLabel}
-              placeholder="Nombre de version"
+              placeholder={tx("Nombre de version")}
               onChange={(event) => setVersionLabel(event.target.value)}
               disabled={!versionPersistence.isEnabled}
             />
@@ -3279,17 +3331,17 @@ function EditorApp({
               disabled={!versionPersistence.isEnabled}
             >
               <Clock data-icon="inline-start" />
-              Guardar version
+              {tx("Guardar version")}
             </Button>
             {versionStatus ? <p className="text-xs leading-5 text-slate-400">{versionStatus}</p> : null}
             {!versionPersistence.isEnabled ? (
-              <p className="text-xs leading-5 text-slate-500">Convex no esta conectado.</p>
+              <p className="text-xs leading-5 text-slate-500">{tx("Convex no esta conectado.")}</p>
             ) : null}
             {versionPersistence.isLoading ? (
-              <p className="text-xs leading-5 text-slate-500">Cargando versiones...</p>
+              <p className="text-xs leading-5 text-slate-500">{tx("Cargando versiones...")}</p>
             ) : null}
             {!versionPersistence.isLoading && versionPersistence.versions.length === 0 ? (
-              <p className="text-xs leading-5 text-slate-500">Todavia no hay versiones guardadas.</p>
+              <p className="text-xs leading-5 text-slate-500">{tx("Todavia no hay versiones guardadas.")}</p>
             ) : null}
             <div className="grid gap-2">
               {versionPersistence.versions.map((version) => (
@@ -3301,17 +3353,17 @@ function EditorApp({
                 >
                   <span className="block truncate text-sm font-semibold text-white">{version.label}</span>
                   <span className="block text-xs text-slate-400">
-                    {version.pageCount} paginas - {version.elementCount} elementos
+                    {version.pageCount} {tx("paginas")} - {version.elementCount} {tx("elementos")}
                   </span>
                   <span className="block text-xs text-slate-500">
-                    {new Date(version.createdAt).toLocaleDateString()}
+                    {new Date(version.createdAt).toLocaleDateString(locale)}
                   </span>
                 </button>
               ))}
             </div>
           </section>
           <section className="space-y-2 rounded-md border border-white/10 bg-[#181c20] p-3">
-            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Compartir</h3>
+            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{tx("Compartir")}</h3>
             <select
               value={shareAccess}
               onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
@@ -3320,7 +3372,7 @@ function EditorApp({
             >
               {SHARE_ACCESS_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {tx(option.label)}
                 </option>
               ))}
             </select>
@@ -3331,17 +3383,17 @@ function EditorApp({
               disabled={!sharePersistence.isEnabled}
             >
               <Share2 data-icon="inline-start" />
-              Crear link
+              {tx("Crear link")}
             </Button>
             {shareStatus ? <p className="text-xs leading-5 text-slate-400">{shareStatus}</p> : null}
             {!sharePersistence.isEnabled ? (
-              <p className="text-xs leading-5 text-slate-500">Convex no esta conectado.</p>
+              <p className="text-xs leading-5 text-slate-500">{tx("Convex no esta conectado.")}</p>
             ) : null}
             {sharePersistence.isLoading ? (
-              <p className="text-xs leading-5 text-slate-500">Cargando links...</p>
+              <p className="text-xs leading-5 text-slate-500">{tx("Cargando links...")}</p>
             ) : null}
             {!sharePersistence.isLoading && sharePersistence.shares.length === 0 ? (
-              <p className="text-xs leading-5 text-slate-500">Todavia no hay links de acceso.</p>
+              <p className="text-xs leading-5 text-slate-500">{tx("Todavia no hay links de acceso.")}</p>
             ) : null}
             <div className="grid gap-2">
               {sharePersistence.shares.map((share) => (
@@ -3354,12 +3406,12 @@ function EditorApp({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-white">
-                        {SHARE_ACCESS_OPTIONS.find((option) => option.value === share.access)?.label}
+                        {tx(SHARE_ACCESS_OPTIONS.find((option) => option.value === share.access)?.label ?? "")}
                       </p>
                       <p className="truncate pt-1 text-xs text-slate-500">{share.url}</p>
                     </div>
                     <Badge className={share.isActive ? "bg-emerald-500/15 text-emerald-100" : "bg-white/8 text-slate-300"}>
-                      {share.isActive ? "Activo" : "Revocado"}
+                      {tx(share.isActive ? "Activo" : "Revocado")}
                     </Badge>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2">
@@ -3369,10 +3421,10 @@ function EditorApp({
                       variant="outline"
                       onClick={() => {
                         void navigator.clipboard?.writeText(share.url)
-                        setShareStatus("Link copiado.")
+                        setShareStatus(tx("Link copiado."))
                       }}
                     >
-                      Copiar
+                      {tx("Copiar")}
                     </Button>
                     <Button
                       type="button"
@@ -3381,7 +3433,7 @@ function EditorApp({
                       onClick={() => void revokeShareLink(share.id)}
                       disabled={!share.isActive}
                     >
-                      Revocar
+                      {tx("Revocar")}
                     </Button>
                   </div>
                 </div>
@@ -3391,17 +3443,17 @@ function EditorApp({
           <div className="space-y-2">
             {persistence.isLoading ? (
               <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                Cargando proyectos...
+                {tx("Cargando proyectos...")}
               </div>
             ) : null}
             {persistence.isEnabled && !persistence.isLoading && persistence.projects.length === 0 ? (
               <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                Guarda tu primer diseno para verlo aqui.
+                {tx("Guarda tu primer diseno para verlo aqui.")}
               </div>
             ) : null}
             {persistence.projects.length > 0 && filteredProjects.length === 0 ? (
               <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                No hay proyectos para esa busqueda.
+                {tx("No hay proyectos para esa busqueda.")}
               </div>
             ) : null}
             {filteredProjects.map((project) => (
@@ -3418,11 +3470,11 @@ function EditorApp({
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">{project.name}</span>
                   <span className="text-xs text-slate-400">
-                    {project.pageCount} paginas - {project.elementCount} elementos
+                    {project.pageCount} {tx("paginas")} - {project.elementCount} {tx("elementos")}
                   </span>
                 </span>
                 <span className="shrink-0 text-xs text-slate-500">
-                  {new Date(project.updatedAt).toLocaleDateString()}
+                  {new Date(project.updatedAt).toLocaleDateString(locale)}
                 </span>
               </button>
             ))}
@@ -3436,28 +3488,28 @@ function EditorApp({
 
       return (
         <>
-          {renderPanelSearch("Busca comentarios")}
+          {renderPanelSearch(tx("Busca comentarios"))}
           {!commentPersistence.isEnabled ? (
             <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm leading-6 text-slate-400">
-              Configura VITE_CONVEX_URL para comentar con otros colaboradores.
+              {tx("Configura VITE_CONVEX_URL para comentar con otros colaboradores.")}
             </div>
           ) : null}
           {commentPersistence.isEnabled && !currentProjectId ? (
             <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm leading-6 text-slate-400">
-              Guarda el proyecto antes de crear comentarios.
+              {tx("Guarda el proyecto antes de crear comentarios.")}
             </div>
           ) : null}
           <div className="space-y-3 rounded-md border border-white/10 bg-[#181c20] p-3">
             <Input
               value={commentAuthor}
               onChange={(event) => setCommentAuthor(event.target.value)}
-              placeholder="Tu nombre"
+              placeholder={tx("Tu nombre")}
               className="bg-[#0e1115] text-slate-100"
             />
             <textarea
               value={commentBody}
               onChange={(event) => setCommentBody(event.target.value)}
-              placeholder="Agrega un comentario"
+              placeholder={tx("Agrega un comentario")}
               className="min-h-24 w-full resize-none rounded-lg border border-white/10 bg-[#0e1115] px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus-visible:border-[#9cff6d]"
             />
             <Button
@@ -3468,7 +3520,7 @@ function EditorApp({
               disabled={!commentPersistence.isEnabled || !currentProjectId}
             >
               <MessageCircle data-icon="inline-start" />
-              Comentar
+              {tx("Comentar")}
             </Button>
           </div>
           {commentError ? (
@@ -3479,17 +3531,17 @@ function EditorApp({
           <div className="space-y-2">
             {commentsLoading ? (
               <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                Cargando comentarios...
+                {tx("Cargando comentarios...")}
               </div>
             ) : null}
             {!commentsLoading && comments.length === 0 ? (
               <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                Todavia no hay comentarios.
+                {tx("Todavia no hay comentarios.")}
               </div>
             ) : null}
             {comments.length > 0 && filteredComments.length === 0 ? (
               <div className="rounded-md border border-white/10 bg-[#181c20] p-4 text-sm text-slate-400">
-                No hay comentarios para esa busqueda.
+                {tx("No hay comentarios para esa busqueda.")}
               </div>
             ) : null}
             {filteredComments.map((comment) => {
@@ -3503,7 +3555,7 @@ function EditorApp({
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-semibold text-white">{comment.authorName}</span>
                     <span className="shrink-0 text-xs text-slate-500">
-                      {new Date(comment.createdAt).toLocaleDateString()}
+                      {new Date(comment.createdAt).toLocaleDateString(locale)}
                     </span>
                   </div>
                   <p className="text-sm leading-6 text-slate-300">{comment.body}</p>
@@ -3521,10 +3573,10 @@ function EditorApp({
     if (activeTool === "tools") {
       return (
         <>
-          {renderPanelSearch("Busca herramientas")}
+          {renderPanelSearch(tx("Busca herramientas"))}
           <div className="space-y-3 rounded-md border border-white/10 bg-[#181c20] p-3">
             <div className="space-y-2">
-              <Label htmlFor="export-format" className="text-slate-300">Formato</Label>
+              <Label htmlFor="export-format" className="text-slate-300">{tx("Formato")}</Label>
               <select
                 id="export-format"
                 value={exportOptions.format}
@@ -3548,7 +3600,7 @@ function EditorApp({
             {exportOptions.format === "jpg" ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-slate-300">Calidad</Label>
+                  <Label className="text-slate-300">{tx("Calidad")}</Label>
                   <span className="text-xs text-slate-400">{Math.round(exportOptions.quality * 100)}%</span>
                 </div>
                 <Slider
@@ -3580,9 +3632,9 @@ function EditorApp({
 
     return (
       <>
-        {renderPanelSearch("Busca tamaños")}
+        {renderPanelSearch(tx("Busca tamaños"))}
         <section className="space-y-2">
-          <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Tamanos</h3>
+          <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{tx("Tamanos")}</h3>
           <div className="grid grid-cols-2 gap-2">
             {filteredDesignFormats.map((format) => (
               <button
@@ -3591,7 +3643,7 @@ function EditorApp({
                 className="rounded-md border border-white/10 bg-[#181c20] px-3 py-3 text-left transition hover:border-[#9cff6d]"
                 onClick={() => createBlankFormat(format.id)}
               >
-                <span className="block text-sm font-semibold text-white">{format.name}</span>
+                <span className="block text-sm font-semibold text-white">{getLocalizedDesignFormatName(locale, format.id, format.name)}</span>
                 <span className="text-xs text-slate-400">
                   {format.size.width} x {format.size.height}
                 </span>
@@ -3600,7 +3652,7 @@ function EditorApp({
           </div>
         </section>
         <section className="space-y-2">
-          <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Redimensionar</h3>
+          <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{tx("Redimensionar")}</h3>
           <div className="grid grid-cols-2 gap-2">
             {filteredDesignFormats.map((format) => (
               <button
@@ -3609,7 +3661,7 @@ function EditorApp({
                 className="rounded-md border border-white/10 bg-[#121619] px-3 py-2 text-left text-xs font-semibold text-slate-300 transition hover:border-[#9cff6d]"
                 onClick={() => resizeCurrentDocument(format.id)}
               >
-                {format.name}
+                {getLocalizedDesignFormatName(locale, format.id, format.name)}
               </button>
             ))}
           </div>
@@ -3696,11 +3748,11 @@ function EditorApp({
       <ExportProgressToast exportProgress={exportProgress} onClose={() => setExportProgress(null)} />
 
       <div className={`editor-app-layout grid grid-cols-[96px_minmax(0,1fr)] ${activeTool === "elements" ? "lg:grid-cols-[96px_360px_minmax(0,1fr)] xl:grid-cols-[96px_360px_minmax(0,1fr)_320px]" : "lg:grid-cols-[96px_320px_minmax(0,1fr)] xl:grid-cols-[96px_320px_minmax(0,1fr)_320px]"}`}>
-        <EditorToolRail activeTool={activeTool} tools={sidebarTools} onSelectTool={setActiveTool} />
+        <EditorToolRail activeTool={activeTool} tools={localizedSidebarTools} onSelectTool={setActiveTool} />
 
         <EditorContextSidebar
           immersive={activeTool === "elements"}
-          title={activeTool === "templates" ? "Redimensionar" : sidebarTools.find((tool) => tool.id === activeTool)?.label ?? "Herramientas"}
+          title={activeTool === "templates" ? tx("Redimensionar") : localizedSidebarTools.find((tool) => tool.id === activeTool)?.label ?? tx("Herramientas")}
           badgeLabel={activeTool === "uploads" || activeTool === "photos" ? `${assets.length} assets` : undefined}
         >
           {renderToolPanel()}
@@ -3710,8 +3762,8 @@ function EditorApp({
           viewportRef={canvasViewportRef}
           stats={[
             `${documentSize.width} x ${documentSize.height}px`,
-            `${document.pages.length} paginas`,
-            `${totalElements} elementos`,
+            `${document.pages.length} ${tx("paginas")}`,
+            `${totalElements} ${tx("elementos")}`,
           ]}
           toolbarLeading={
             remoteCollaborators.length > 0 ? (
@@ -3746,7 +3798,7 @@ function EditorApp({
                 size="icon-sm"
                 variant="ghost"
                 className="text-[#cfd7d2] hover:bg-white/10"
-                aria-label="Deshacer"
+                aria-label={tx("Deshacer")}
                 onClick={undoDocument}
                 disabled={!canUndo}
               >
@@ -3756,7 +3808,7 @@ function EditorApp({
                 size="icon-sm"
                 variant="ghost"
                 className="text-[#cfd7d2] hover:bg-white/10"
-                aria-label="Rehacer"
+                aria-label={tx("Rehacer")}
                 onClick={redoDocument}
                 disabled={!canRedo}
               >
@@ -3766,23 +3818,23 @@ function EditorApp({
                 size="icon-sm"
                 variant="ghost"
                 className="text-[#cfd7d2] hover:bg-white/10"
-                aria-label={allSelectedLocked ? "Desbloquear" : "Bloquear"}
+                aria-label={tx(allSelectedLocked ? "Desbloquear" : "Bloquear")}
                 onClick={toggleSelectedLocked}
                 disabled={!hasSelection}
               >
                 <Lock />
               </Button>
-              <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Duplicar" onClick={duplicateSelected} disabled={!hasSelection}>
+              <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label={tx("Duplicar")} onClick={duplicateSelected} disabled={!hasSelection}>
                 <CopyPlus />
               </Button>
-              <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Agregar pagina" onClick={addNewPage} disabled={Boolean(removingPageId)}>
+              <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label={tx("Agregar pagina")} onClick={addNewPage} disabled={Boolean(removingPageId)}>
                 <SquarePlus />
               </Button>
             </>
           }
           footer={
             <EditorFooter
-              activePageLabel={`${resolvedActivePageId ? document.pages.findIndex((page) => page.id === resolvedActivePageId) + 1 : 1} de ${document.pages.length}`}
+              activePageLabel={`${resolvedActivePageId ? document.pages.findIndex((page) => page.id === resolvedActivePageId) + 1 : 1} ${tx("de")} ${document.pages.length}`}
               zoomLabel={`${Math.round(canvasPreviewScale * 100)}%`}
             />
           }
@@ -3811,13 +3863,13 @@ function EditorApp({
                         size="icon-sm"
                         variant="ghost"
                         className="text-[#cfd7d2] hover:bg-red-500/10 hover:text-red-300"
-                        aria-label={`Eliminar ${page.name}`}
+                        aria-label={`${tx("Eliminar")} ${page.name}`}
                         onClick={() => removePage(page.id)}
                         disabled={document.pages.length <= 1 || Boolean(removingPageId)}
                       >
                         <Trash2 />
                       </Button>
-                      <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label="Agregar pagina" onClick={() => addNewPageAfter(page.id)} disabled={Boolean(removingPageId)}>
+                      <Button size="icon-sm" variant="ghost" className="text-[#cfd7d2] hover:bg-white/10" aria-label={tx("Agregar pagina")} onClick={() => addNewPageAfter(page.id)} disabled={Boolean(removingPageId)}>
                         <SquarePlus />
                       </Button>
                     </div>
@@ -3999,7 +4051,7 @@ function EditorApp({
                         disabled={Boolean(removingPageId)}
                       >
                         <Plus className="size-4" />
-                        Agregar una pagina
+                        {tx("Agregar una pagina")}
                       </button>
                     </div>
                   ) : null}
@@ -4024,17 +4076,17 @@ function EditorApp({
               aria-describedby="delete-page-description"
               className="w-full max-w-md rounded-xl border border-white/12 bg-[#171b1f] p-5 text-slate-100"
             >
-              <h2 id="delete-page-title" className="text-lg font-bold">¿Eliminar esta página?</h2>
+              <h2 id="delete-page-title" className="text-lg font-bold">{tx("¿Eliminar esta página?")}</h2>
               <p id="delete-page-description" className="mt-2 text-sm leading-6 text-slate-400">
-                Esta página contiene elementos. Al eliminarla, también se eliminará todo su contenido.
+                {tx("Esta página contiene elementos. Al eliminarla, también se eliminará todo su contenido.")}
               </p>
               <div className="mt-6 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setPagePendingDeletion(null)}>
-                  Cancelar
+                  {tx("Cancelar")}
                 </Button>
                 <Button type="button" className="bg-red-500 text-white hover:bg-red-400" onClick={() => confirmPageDeletion()}>
                   <Trash2 data-icon="inline-start" />
-                  Eliminar página
+                  {tx("Eliminar página")}
                 </Button>
               </div>
             </div>
@@ -4049,7 +4101,7 @@ function EditorApp({
             items={[
               {
                 id: "copy",
-                label: "Copiar",
+                label: tx("Copiar"),
                 icon: Copy,
                 shortcut: "⌘C",
                 disabled: !contextMenuActionById.copy.enabled,
@@ -4057,7 +4109,7 @@ function EditorApp({
               },
               {
                 id: "paste",
-                label: "Pegar",
+                label: tx("Pegar"),
                 icon: ClipboardPaste,
                 shortcut: "⌘V",
                 disabled: !contextMenuActionById.paste.enabled,
@@ -4065,7 +4117,7 @@ function EditorApp({
               },
               {
                 id: "duplicate",
-                label: "Duplicar",
+                label: tx("Duplicar"),
                 icon: CopyPlus,
                 shortcut: "⌘D",
                 disabled: !contextMenuActionById.duplicate.enabled,
@@ -4073,31 +4125,31 @@ function EditorApp({
               },
               {
                 id: "position",
-                label: "Posición",
+                label: tx("Posición"),
                 icon: BringToFront,
                 disabled: !contextMenuActionById.position.enabled,
                 submenu: [
                   {
-                    label: "Traer al frente",
+                    label: tx("Traer al frente"),
                     icon: ChevronsUp,
                     disabled: contextMenuLayerPosition?.isFront ?? true,
                     onSelect: () => moveLayerElement(elementContextMenu.pageId, elementContextMenu.elementId, "front"),
                   },
                   {
-                    label: "Traer hacia delante",
+                    label: tx("Traer hacia delante"),
                     icon: ChevronUp,
                     disabled: contextMenuLayerPosition?.isFront ?? true,
                     onSelect: () => moveLayerElement(elementContextMenu.pageId, elementContextMenu.elementId, "forward"),
                   },
                   {
-                    label: "Enviar hacia atrás",
+                    label: tx("Enviar hacia atrás"),
                     icon: ChevronDown,
                     separatorBefore: true,
                     disabled: contextMenuLayerPosition?.isBack ?? true,
                     onSelect: () => moveLayerElement(elementContextMenu.pageId, elementContextMenu.elementId, "backward"),
                   },
                   {
-                    label: "Enviar al fondo",
+                    label: tx("Enviar al fondo"),
                     icon: ChevronsDown,
                     disabled: contextMenuLayerPosition?.isBack ?? true,
                     onSelect: () => moveLayerElement(elementContextMenu.pageId, elementContextMenu.elementId, "back"),
@@ -4106,7 +4158,7 @@ function EditorApp({
               },
               {
                 id: "delete",
-                label: "Eliminar",
+                label: tx("Eliminar"),
                 icon: Trash2,
                 shortcut: "Delete",
                 destructive: true,
@@ -4115,22 +4167,22 @@ function EditorApp({
               },
               {
                 id: "align",
-                label: "Alinear a la página",
+                label: tx("Alinear a la página"),
                 icon: AlignHorizontalJustifyCenter,
                 separatorBefore: true,
                 disabled: !contextMenuActionById.align.enabled,
                 submenu: [
-                  { label: "Izquierda", icon: AlignHorizontalJustifyStart, onSelect: () => alignSelectedToCanvas("left") },
-                  { label: "Centro", icon: AlignHorizontalJustifyCenter, onSelect: () => alignSelectedToCanvas("center") },
-                  { label: "Derecha", icon: AlignHorizontalJustifyEnd, onSelect: () => alignSelectedToCanvas("right") },
-                  { label: "Arriba", icon: AlignVerticalJustifyStart, separatorBefore: true, onSelect: () => alignSelectedToCanvas("top") },
-                  { label: "Medio", icon: AlignVerticalJustifyCenter, onSelect: () => alignSelectedToCanvas("middle") },
-                  { label: "Abajo", icon: AlignVerticalJustifyEnd, onSelect: () => alignSelectedToCanvas("bottom") },
+                  { label: tx("Izquierda"), icon: AlignHorizontalJustifyStart, onSelect: () => alignSelectedToCanvas("left") },
+                  { label: tx("Centro"), icon: AlignHorizontalJustifyCenter, onSelect: () => alignSelectedToCanvas("center") },
+                  { label: tx("Derecha"), icon: AlignHorizontalJustifyEnd, onSelect: () => alignSelectedToCanvas("right") },
+                  { label: tx("Arriba"), icon: AlignVerticalJustifyStart, separatorBefore: true, onSelect: () => alignSelectedToCanvas("top") },
+                  { label: tx("Medio"), icon: AlignVerticalJustifyCenter, onSelect: () => alignSelectedToCanvas("middle") },
+                  { label: tx("Abajo"), icon: AlignVerticalJustifyEnd, onSelect: () => alignSelectedToCanvas("bottom") },
                 ],
               },
               {
                 id: "create-component",
-                label: "Crear un componente",
+                label: tx("Crear un componente"),
                 icon: Shapes,
                 premium: true,
                 disabled: !contextMenuActionById["create-component"].enabled,
@@ -4138,7 +4190,7 @@ function EditorApp({
               },
               ...(contextMenuActionById.comment.visible ? [{
                 id: "comment",
-                label: "Comentar",
+                label: tx("Comentar"),
                 icon: MessageCircle,
                 shortcut: "⌥⌘N",
                 disabled: !contextMenuActionById.comment.enabled,
@@ -4146,7 +4198,7 @@ function EditorApp({
               }] : []),
               {
                 id: "lock",
-                label: allSelectedLocked ? "Desbloquear" : "Bloquear",
+                label: tx(allSelectedLocked ? "Desbloquear" : "Bloquear"),
                 icon: Lock,
                 shortcut: "⌥⇧L",
                 disabled: !contextMenuActionById.lock.enabled,
@@ -4154,7 +4206,7 @@ function EditorApp({
               },
               ...(contextMenuActionById.link.visible ? [{
                 id: "link",
-                label: "Enlace",
+                label: tx("Enlace"),
                 icon: Link2,
                 shortcut: "⌘K",
                 disabled: !contextMenuActionById.link.enabled,
@@ -4162,20 +4214,20 @@ function EditorApp({
               }] : []),
               ...(contextMenuActionById.duration.visible ? [{
                 id: "duration",
-                label: "Mostrar la duración del elemento",
+                label: tx("Mostrar la duración del elemento"),
                 icon: Clock,
                 disabled: !contextMenuActionById.duration.enabled,
               }] : []),
               ...(contextMenuActionById["alt-text"].visible ? [{
                 id: "alt-text",
-                label: "Texto alternativo",
+                label: tx("Texto alternativo"),
                 icon: Accessibility,
                 disabled: !contextMenuActionById["alt-text"].enabled,
                 onSelect: () => openElementMetadataEditor("altText"),
               }] : []),
               ...(contextMenuActionById["magic-text"].visible ? [{
                 id: "magic-text",
-                label: "Texto Mágico",
+                label: tx("Texto Mágico"),
                 icon: WandSparkles,
                 premium: true,
                 separatorBefore: true,
@@ -4183,7 +4235,7 @@ function EditorApp({
               }] : []),
               ...(contextMenuActionById.translate.visible ? [{
                 id: "translate",
-                label: "Traducir el texto",
+                label: tx("Traducir el texto"),
                 icon: Languages,
                 premium: true,
                 disabled: !contextMenuActionById.translate.enabled,
@@ -4194,13 +4246,13 @@ function EditorApp({
 
         {elementMetadataEditor ? (
           <ElementMetadataDialog
-            title={elementMetadataEditor.kind === "link" ? "Enlace del elemento" : "Texto alternativo"}
+            title={tx(elementMetadataEditor.kind === "link" ? "Enlace del elemento" : "Texto alternativo")}
             description={
               elementMetadataEditor.kind === "link"
-                ? "Abre esta URL cuando el diseño se publique en un formato interactivo."
-                : "Describe el elemento para personas que usan tecnologías de asistencia."
+                ? tx("Abre esta URL cuando el diseño se publique en un formato interactivo.")
+                : tx("Describe el elemento para personas que usan tecnologías de asistencia.")
             }
-            label={elementMetadataEditor.kind === "link" ? "URL" : "Descripción"}
+            label={elementMetadataEditor.kind === "link" ? "URL" : tx("Descripción")}
             multiline={elementMetadataEditor.kind === "altText"}
             value={elementMetadataEditor.value}
             onChange={(value) => setElementMetadataEditor((current) => current ? { ...current, value } : current)}
@@ -4213,13 +4265,13 @@ function EditorApp({
         <aside className="editor-inspector hidden min-h-0 overflow-y-auto border-l border-white/8 bg-[#121619] p-4 text-slate-100 xl:block">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold text-white">Inspector</h2>
+              <h2 className="text-sm font-bold text-white">{tx("Inspector")}</h2>
               <p className="text-xs text-slate-400">
                 {hasMultiSelection
-                  ? `${selectedElementIds.length} elementos seleccionados`
+                  ? `${selectedElementIds.length} ${tx("elementos seleccionados")}`
                   : selectedElement
-                    ? `${readableType(selectedElement)} seleccionado`
-                    : "Selecciona un elemento"}
+                    ? `${tx(readableType(selectedElement))} ${tx("seleccionado")}`
+                    : tx("Selecciona un elemento")}
               </p>
             </div>
             <div className="flex gap-1">
@@ -4228,28 +4280,28 @@ function EditorApp({
                   <Button
                     size="icon-sm"
                     variant="outline"
-                    aria-label="Duplicar"
+                    aria-label={tx("Duplicar")}
                     onClick={duplicateSelected}
                     disabled={!hasSelection}
                   >
                     <Layers3 />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Duplicar</TooltipContent>
+                <TooltipContent>{tx("Duplicar")}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     size="icon-sm"
                     variant="outline"
-                    aria-label="Eliminar"
+                    aria-label={tx("Eliminar")}
                     onClick={removeSelected}
                     disabled={!hasSelection}
                   >
                     <Trash2 />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Eliminar</TooltipContent>
+                <TooltipContent>{tx("Eliminar")}</TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -4264,15 +4316,15 @@ function EditorApp({
               </div>
 
               <div className="space-y-3">
-                <Label>Alinear seleccion</Label>
+                <Label>{tx("Alinear seleccion")}</Label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { alignment: "left", icon: AlignHorizontalJustifyStart, label: "Alinear izquierda" },
-                    { alignment: "center", icon: AlignHorizontalJustifyCenter, label: "Alinear centro" },
-                    { alignment: "right", icon: AlignHorizontalJustifyEnd, label: "Alinear derecha" },
-                    { alignment: "top", icon: AlignVerticalJustifyStart, label: "Alinear arriba" },
-                    { alignment: "middle", icon: AlignVerticalJustifyCenter, label: "Alinear medio" },
-                    { alignment: "bottom", icon: AlignVerticalJustifyEnd, label: "Alinear abajo" },
+                    { alignment: "left", icon: AlignHorizontalJustifyStart, label: tx("Alinear izquierda") },
+                    { alignment: "center", icon: AlignHorizontalJustifyCenter, label: tx("Alinear centro") },
+                    { alignment: "right", icon: AlignHorizontalJustifyEnd, label: tx("Alinear derecha") },
+                    { alignment: "top", icon: AlignVerticalJustifyStart, label: tx("Alinear arriba") },
+                    { alignment: "middle", icon: AlignVerticalJustifyCenter, label: tx("Alinear medio") },
+                    { alignment: "bottom", icon: AlignVerticalJustifyEnd, label: tx("Alinear abajo") },
                   ].map((option) => {
                     const Icon = option.icon
 
@@ -4304,7 +4356,7 @@ function EditorApp({
                 </Button>
                 <Button variant="outline" onClick={toggleSelectedLocked}>
                   <Lock data-icon="inline-start" />
-                  {allSelectedLocked ? "Desbloquear" : "Bloquear"}
+                  {tx(allSelectedLocked ? "Desbloquear" : "Bloquear")}
                 </Button>
                 <Button variant="outline" onClick={duplicateSelected}>
                   <BringToFront data-icon="inline-start" />
@@ -4321,7 +4373,7 @@ function EditorApp({
               {selectedTextElement ? (
                 <>
                   <div className="space-y-2">
-                    <Label>Fuente</Label>
+                    <Label>{tx("Fuente")}</Label>
                     <div className="editor-font-list max-h-44 overflow-y-auto rounded-lg border border-white/10 bg-[#0e1115] p-1">
                       {FONT_OPTIONS.map((fontFamily) => (
                         <button
@@ -4340,7 +4392,7 @@ function EditorApp({
                   </div>
 
                   <div className="flex items-center justify-between gap-3">
-                    <Label htmlFor="text-font-size">Tamano</Label>
+                    <Label htmlFor="text-font-size">{tx("Tamano")}</Label>
                     <div className="flex items-center gap-2">
                       <Input
                         id="text-font-size"
@@ -4362,12 +4414,12 @@ function EditorApp({
                   </div>
 
                   <div className="space-y-3">
-                    <Label>Alineacion</Label>
+                    <Label>{tx("Alineacion")}</Label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { value: "left", icon: AlignLeft, label: "Izquierda" },
-                        { value: "center", icon: AlignCenter, label: "Centro" },
-                        { value: "right", icon: AlignRight, label: "Derecha" },
+                        { value: "left", icon: AlignLeft, label: tx("Izquierda") },
+                        { value: "center", icon: AlignCenter, label: tx("Centro") },
+                        { value: "right", icon: AlignRight, label: tx("Derecha") },
                       ].map((option) => {
                         const Icon = option.icon
 
@@ -4389,7 +4441,7 @@ function EditorApp({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Interlineado</Label>
+                      <Label>{tx("Interlineado")}</Label>
 	                      <span className="text-xs text-slate-400">{selectedTextElement.lineHeight.toFixed(2)}</span>
                     </div>
                     <Slider
@@ -4403,7 +4455,7 @@ function EditorApp({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Espaciado</Label>
+                      <Label>{tx("Espaciado")}</Label>
 	                      <span className="text-xs text-slate-400">{Math.round(selectedTextElement.letterSpacing)}px</span>
                     </div>
                     <Slider
@@ -4420,12 +4472,12 @@ function EditorApp({
               {selectedImageElement ? (
                 <>
                   <div className="space-y-3">
-                    <Label>Mascara</Label>
+                    <Label>{tx("Mascara")}</Label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { value: "none", label: "Ninguna" },
-                        { value: "rounded", label: "Bordes" },
-                        { value: "circle", label: "Circulo" },
+                        { value: "none", label: tx("Ninguna") },
+                        { value: "rounded", label: tx("Bordes") },
+                        { value: "circle", label: tx("Circulo") },
                       ].map((option) => (
                         <Button
                           key={option.value}
@@ -4441,7 +4493,7 @@ function EditorApp({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Recorte X</Label>
+                      <Label>{tx("Recorte X")}</Label>
                       <span className="text-xs text-slate-400">{Math.round(selectedImageElement.crop.x * 100)}%</span>
                     </div>
                     <Slider
@@ -4455,7 +4507,7 @@ function EditorApp({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Recorte Y</Label>
+                      <Label>{tx("Recorte Y")}</Label>
                       <span className="text-xs text-slate-400">{Math.round(selectedImageElement.crop.y * 100)}%</span>
                     </div>
                     <Slider
@@ -4469,7 +4521,7 @@ function EditorApp({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Ancho visible</Label>
+                      <Label>{tx("Ancho visible")}</Label>
                       <span className="text-xs text-slate-400">
                         {Math.round(selectedImageElement.crop.width * 100)}%
                       </span>
@@ -4485,7 +4537,7 @@ function EditorApp({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Alto visible</Label>
+                      <Label>{tx("Alto visible")}</Label>
                       <span className="text-xs text-slate-400">
                         {Math.round(selectedImageElement.crop.height * 100)}%
                       </span>
@@ -4506,12 +4558,12 @@ function EditorApp({
                     onClick={() => updateSelectedImageCrop(createDefaultImageCrop())}
                   >
                     <ImageIcon data-icon="inline-start" />
-                    Restablecer recorte
+                    {tx("Restablecer recorte")}
                   </Button>
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Brillo</Label>
+                      <Label>{tx("Brillo")}</Label>
                       <span className="text-xs text-slate-400">
                         {Math.round(selectedImageElement.filters.brightness * 100)}%
                       </span>
@@ -4527,7 +4579,7 @@ function EditorApp({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Contraste</Label>
+                      <Label>{tx("Contraste")}</Label>
                       <span className="text-xs text-slate-400">
                         {Math.round(selectedImageElement.filters.contrast * 100)}%
                       </span>
@@ -4543,7 +4595,7 @@ function EditorApp({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Saturacion</Label>
+                      <Label>{tx("Saturacion")}</Label>
                       <span className="text-xs text-slate-400">
                         {Math.round(selectedImageElement.filters.saturation * 100)}%
                       </span>
@@ -4559,7 +4611,7 @@ function EditorApp({
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label>Desenfoque</Label>
+                      <Label>{tx("Desenfoque")}</Label>
                       <span className="text-xs text-slate-400">{Math.round(selectedImageElement.filters.blur)}px</span>
                     </div>
                     <Slider
@@ -4578,7 +4630,7 @@ function EditorApp({
                     onClick={() => updateSelectedImageFilters(createDefaultImageFilters())}
                   >
                     <WandSparkles data-icon="inline-start" />
-                    Restablecer filtros
+                    {tx("Restablecer filtros")}
                   </Button>
                 </>
               ) : null}
@@ -4606,7 +4658,7 @@ function EditorApp({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="element-width">Ancho</Label>
+                  <Label htmlFor="element-width">{tx("Ancho")}</Label>
                   <Input
                     id="element-width"
                     type="number"
@@ -4615,7 +4667,7 @@ function EditorApp({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="element-height">Alto</Label>
+                  <Label htmlFor="element-height">{tx("Alto")}</Label>
                   <Input
                     id="element-height"
                     type="number"
@@ -4627,7 +4679,7 @@ function EditorApp({
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label>Rotacion</Label>
+                  <Label>{tx("Rotacion")}</Label>
 	                  <span className="text-xs text-slate-400">{Math.round(selectedElement.rotation)} deg</span>
                 </div>
                 <Slider
@@ -4641,7 +4693,7 @@ function EditorApp({
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label>Opacidad</Label>
+                  <Label>{tx("Opacidad")}</Label>
 	                  <span className="text-xs text-slate-400">{Math.round(selectedElement.opacity * 100)}%</span>
                 </div>
                 <Slider
@@ -4649,21 +4701,21 @@ function EditorApp({
                   min={0}
                   max={1}
                   step={0.05}
-                  aria-label="Opacidad del elemento"
+                  aria-label={tx("Opacidad del elemento")}
                   onValueChange={([opacity]) => updateSelected({ opacity })}
                 />
               </div>
 
               {selectedElement.type === "shape" || selectedElement.type === "text" ? (
                 <div className="space-y-3">
-                  <Label htmlFor="element-fill-color">Color de relleno</Label>
+                  <Label htmlFor="element-fill-color">{tx("Color de relleno")}</Label>
                   <div className="editor-custom-element-color flex items-center gap-3 rounded-md border border-white/10 bg-[#181c20] p-2">
                     <input
                       id="element-fill-color"
                       type="color"
                       value={normalizeBackgroundColorForPicker(selectedElement.fill)}
                       className="editor-color-picker h-9 w-12 shrink-0 cursor-pointer rounded-md bg-transparent"
-                      aria-label="Elegir color de relleno personalizado"
+                      aria-label={tx("Elegir color de relleno personalizado")}
                       onChange={(event) => updateSelected({ fill: event.target.value })}
                     />
                     <span className="text-xs font-medium uppercase text-slate-300">
@@ -4694,10 +4746,10 @@ function EditorApp({
                 <>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="shape-stroke-color">Borde</Label>
+                      <Label htmlFor="shape-stroke-color">{tx("Borde")}</Label>
                       <span className="text-xs text-slate-400">
                         {selectedShapeElement.strokeWidth === 0
-                          ? "Sin borde"
+                          ? tx("Sin borde")
                           : `${Math.round(selectedShapeElement.strokeWidth)}px`}
                       </span>
                     </div>
@@ -4707,7 +4759,7 @@ function EditorApp({
                         type="color"
                         value={normalizeBackgroundColorForPicker(selectedShapeElement.stroke, "#0f172a")}
                         className="editor-color-picker h-9 w-12 shrink-0 cursor-pointer rounded-md bg-transparent"
-                        aria-label="Elegir color de borde personalizado"
+                        aria-label={tx("Elegir color de borde personalizado")}
                         onChange={(event) => updateSelectedShapeStyle({ stroke: event.target.value })}
                       />
                       <span className="text-xs font-medium uppercase text-slate-300">
@@ -4719,7 +4771,7 @@ function EditorApp({
                       min={0}
                       max={200}
                       step={2}
-                      aria-label="Grosor del borde"
+                      aria-label={tx("Grosor del borde")}
                       onValueChange={([strokeWidth]) => updateSelectedShapeStyle({ strokeWidth })}
                     />
                   </div>
@@ -4727,7 +4779,7 @@ function EditorApp({
                   {String(selectedShapeElement.shapeType) === "rect" ? (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <Label>Radio de esquinas</Label>
+                        <Label>{tx("Radio de esquinas")}</Label>
                         <span className="text-xs text-slate-400">
                           {Math.round(selectedShapeElement.cornerRadius)}px
                         </span>
@@ -4737,7 +4789,7 @@ function EditorApp({
                         min={0}
                         max={Math.min(selectedShapeElement.width, selectedShapeElement.height) / 2}
                         step={4}
-                        aria-label="Radio de las esquinas"
+                        aria-label={tx("Radio de las esquinas")}
                         onValueChange={([cornerRadius]) => updateSelectedShapeStyle({ cornerRadius })}
                       />
                     </div>
@@ -4750,17 +4802,17 @@ function EditorApp({
               <div className="grid grid-cols-2 gap-2">
                 <Button className="border-white/20 bg-white/10 text-slate-100 hover:bg-white/20 hover:text-white" variant="outline" onClick={duplicateSelected}>
                   <BringToFront data-icon="inline-start" />
-                  Duplicar
+                  {tx("Duplicar")}
                 </Button>
                 <Button variant="destructive" onClick={removeSelected}>
                   <Trash2 data-icon="inline-start" />
-                  Eliminar
+                  {tx("Eliminar")}
                 </Button>
               </div>
             </div>
           ) : (
 	            <div className="rounded-md border border-dashed border-white/15 bg-[#181c20] p-4 text-sm leading-6 text-slate-400">
-              Haz click en cualquier imagen, texto o forma para ver sus controladores y propiedades.
+              {tx("Haz click en cualquier imagen, texto o forma para ver sus controladores y propiedades.")}
             </div>
           )}
         </aside>

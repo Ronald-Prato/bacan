@@ -243,6 +243,40 @@
   border-color: var(--vacan-accent) !important;
 }
 
+.editor-topbar .language-selector__trigger,
+.editor-topbar .language-selector__menu {
+  color: #dce3d7;
+  border-color: rgb(255 255 255 / 10%);
+  background: #171b1e;
+}
+
+.editor-topbar .language-selector__trigger:hover,
+.editor-topbar .language-selector__option:hover,
+.editor-topbar .language-selector__option[aria-checked="true"] {
+  color: #ffffff;
+  background: rgb(255 255 255 / 10%);
+}
+
+.editor-topbar .language-selector__trigger:focus-visible,
+.editor-topbar .language-selector__option:focus-visible {
+  outline: 2px solid #9cff6d;
+  outline-offset: 2px;
+}
+
+.editor-theme-light .editor-topbar .language-selector__trigger,
+.editor-theme-light .editor-topbar .language-selector__menu {
+  color: var(--vacan-foreground);
+  border-color: color-mix(in srgb, var(--vacan-foreground) 24%, var(--vacan-background));
+  background: var(--vacan-background);
+}
+
+.editor-theme-light .editor-topbar .language-selector__trigger:hover,
+.editor-theme-light .editor-topbar .language-selector__option:hover,
+.editor-theme-light .editor-topbar .language-selector__option[aria-checked="true"] {
+  color: var(--vacan-foreground);
+  background: color-mix(in srgb, var(--vacan-accent) 15%, var(--vacan-background));
+}
+
 .editor-export-trigger {
   border: 1px solid #9cff6d;
   color: #09100d;
@@ -644,6 +678,25 @@
   padding: 2rem 1rem;
   color: #f7f8f4;
   background: #0a0d10;
+}
+
+.bacan-auth-language {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+}
+
+.bacan-auth-page .language-selector__trigger,
+.bacan-auth-page .language-selector__menu {
+  color: #f7f8f4;
+  border-color: color-mix(in srgb, #f7f8f4 14%, transparent);
+  background: #12171c;
+}
+
+.bacan-auth-page .language-selector__trigger:hover,
+.bacan-auth-page .language-selector__option:hover,
+.bacan-auth-page .language-selector__option[aria-checked="true"] {
+  background: color-mix(in srgb, #f7f8f4 10%, #12171c);
 }
 
 .bacan-auth-card {
@@ -1611,6 +1664,8 @@
 }
 
 .workspace-home__theme-switcher,
+.workspace-home .language-selector__trigger,
+.workspace-home .language-selector__menu,
 .workspace-home__status,
 .workspace-home__create-card,
 .workspace-home__project-card,
@@ -1623,6 +1678,7 @@
 }
 
 .workspace-home__theme-button,
+.workspace-home .language-selector__trigger,
 .workspace-home__quiet-button,
 .workspace-home__arrow {
   color: var(--home-muted);
@@ -1634,6 +1690,8 @@
 }
 
 .workspace-home__theme-button:focus-visible,
+.workspace-home .language-selector__trigger:focus-visible,
+.workspace-home .language-selector__option:focus-visible,
 .workspace-home__quiet-button:focus-visible,
 .workspace-home__create-card:focus-visible,
 .workspace-home__project-card:focus-visible,
@@ -1647,6 +1705,9 @@
 }
 
 .workspace-home__create-card:hover,
+.workspace-home .language-selector__trigger:hover,
+.workspace-home .language-selector__option:hover,
+.workspace-home .language-selector__option[aria-checked="true"],
 .workspace-home__project-card:hover,
 .workspace-home__format-card:hover,
 .workspace-home__quiet-button:hover {

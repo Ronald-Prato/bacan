@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react"
 import { ArrowUpRight, Check, Moon, Plus, Sun, X } from "lucide-react"
 
-import { formatRecentProjectUpdate } from "@/editor/dashboard"
 import type { SavedProject } from "@/editor/projects"
 import {
   DESIGN_FORMATS,
@@ -11,6 +10,9 @@ import {
   type DesignFormatId,
 } from "@/editor/templates"
 import { cn } from "@/lib/utils"
+import { LanguageSelector } from "@/components/ui/language-selector"
+import { formatRelativeProjectUpdate, getLocalizedDesignFormatName } from "@/i18n/i18n"
+import { useI18n } from "@/i18n/i18n-context"
 
 type WorkspaceHomeProps = {
   accountMenu?: ReactNode
@@ -47,6 +49,7 @@ export function WorkspaceHome({
   onCreateCustom,
   onOpenProject,
 }: WorkspaceHomeProps) {
+  const { locale, t, tx } = useI18n()
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [selectedFormatId, setSelectedFormatId] = useState<DesignFormatId>("square-post")
   const [unit, setUnit] = useState<CustomDesignUnit>("px")
@@ -63,9 +66,9 @@ export function WorkspaceHome({
     try {
       return { size: resolveCustomDesignSize(customInput), error: "" }
     } catch (error) {
-      return { size: null, error: error instanceof Error ? error.message : "Tamaño inválido." }
+      return { size: null, error: error instanceof Error ? tx(error.message) : t("workspace.invalidSize") }
     }
-  }, [customInput])
+  }, [customInput, t, tx])
 
   const chooseFormat = (formatId: DesignFormatId) => {
     setSelectedFormatId(formatId)
@@ -93,11 +96,12 @@ export function WorkspaceHome({
       <header className="workspace-home__header flex h-16 items-center justify-between border-b px-5 sm:px-8">
         <span className="workspace-home__brand text-xl font-bold tracking-[-0.035em]">Bacan</span>
         <div className="flex items-center gap-3">
-          <div className="workspace-home__theme-switcher flex items-center rounded-md border p-1" aria-label="Tema del inicio">
+          <LanguageSelector />
+          <div className="workspace-home__theme-switcher flex items-center rounded-md border p-1" aria-label={t("theme.workspace")}>
             <button
               type="button"
               className="workspace-home__theme-button grid size-8 place-items-center rounded-sm"
-              aria-label="Usar tema claro"
+              aria-label={t("theme.light")}
               aria-pressed={theme === "light"}
               onClick={() => onThemeChange("light")}
             >
@@ -106,7 +110,7 @@ export function WorkspaceHome({
             <button
               type="button"
               className="workspace-home__theme-button grid size-8 place-items-center rounded-sm"
-              aria-label="Usar tema oscuro"
+              aria-label={t("theme.dark")}
               aria-pressed={theme === "dark"}
               onClick={() => onThemeChange("dark")}
             >
@@ -120,7 +124,7 @@ export function WorkspaceHome({
       <div className="mx-auto w-full max-w-7xl px-5 pb-16 pt-14 sm:px-8 sm:pt-20">
         <section className="mx-auto max-w-2xl text-center">
           <h1 className="workspace-home__title text-balance text-4xl font-bold tracking-[-0.045em] sm:text-5xl">
-            ¿Qué vas a crear hoy?
+            {t("workspace.heroTitle")}
           </h1>
 
           <button
@@ -133,9 +137,9 @@ export function WorkspaceHome({
             </span>
             <span className="min-w-0">
               <span className="workspace-home__primary-text block text-lg font-semibold tracking-[-0.02em] sm:text-xl">
-                Crear nuevo diseño
+                {t("workspace.createDesign")}
               </span>
-              <span className="workspace-home__muted-text mt-1 block text-sm sm:text-base">Empieza desde un lienzo en blanco</span>
+              <span className="workspace-home__muted-text mt-1 block text-sm sm:text-base">{t("workspace.createDescription")}</span>
             </span>
             <ArrowUpRight className="workspace-home__arrow ml-auto hidden size-5 sm:block" />
           </button>
@@ -143,19 +147,19 @@ export function WorkspaceHome({
 
         <section className="mt-12 sm:mt-16" aria-labelledby="recent-projects-heading">
           <h2 id="recent-projects-heading" className="workspace-home__section-title text-lg font-semibold tracking-[-0.025em] sm:text-xl">
-            Recientes
+            {t("workspace.recents")}
           </h2>
 
           {isLoading ? (
             <div className="workspace-home__status mt-4 rounded-md border px-5 py-8 text-center text-sm">
-              Cargando proyectos...
+              {t("workspace.loading")}
             </div>
           ) : null}
 
           {!isLoading && recentProjects.length === 0 ? (
             <div className="workspace-home__status mt-4 rounded-md border border-dashed px-5 py-8 text-center">
-              <p className="workspace-home__primary-text font-medium">Todavía no tienes proyectos recientes.</p>
-              <p className="workspace-home__muted-text mt-1 text-sm">Crea un diseño para empezar.</p>
+              <p className="workspace-home__primary-text font-medium">{t("workspace.emptyTitle")}</p>
+              <p className="workspace-home__muted-text mt-1 text-sm">{t("workspace.emptyDescription")}</p>
             </div>
           ) : null}
 
@@ -173,7 +177,7 @@ export function WorkspaceHome({
                     <span className="min-w-0 flex-1">
                       <span className="workspace-home__primary-text block truncate text-sm font-semibold tracking-[-0.015em]">{project.name}</span>
                       <span className="workspace-home__muted-text mt-0.5 block text-xs">
-                        {formatRecentProjectUpdate(project.updatedAt)}
+                        {formatRelativeProjectUpdate(locale, project.updatedAt)}
                       </span>
                     </span>
                     <ArrowUpRight className="workspace-home__arrow mt-0.5 size-3.5 shrink-0" />
@@ -194,15 +198,15 @@ export function WorkspaceHome({
           <section role="dialog" aria-modal="true" aria-labelledby="create-design-title" className="workspace-home__modal max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-lg border">
             <header className="workspace-home__modal-header flex items-start justify-between border-b px-6 py-5 sm:px-8">
               <div>
-                <h2 id="create-design-title" className="workspace-home__primary-text text-2xl font-bold tracking-[-0.035em]">Crear nuevo diseño</h2>
-                <p className="workspace-home__muted-text mt-1 text-sm">Elige un formato o define las dimensiones exactas.</p>
+                <h2 id="create-design-title" className="workspace-home__primary-text text-2xl font-bold tracking-[-0.035em]">{t("workspace.createDesign")}</h2>
+                <p className="workspace-home__muted-text mt-1 text-sm">{t("workspace.createDialogDescription")}</p>
               </div>
-              <button type="button" aria-label="Cerrar" className="workspace-home__quiet-button grid size-9 place-items-center rounded-md" onClick={() => setIsCreateOpen(false)}><X className="size-5" /></button>
+              <button type="button" aria-label={t("workspace.close")} className="workspace-home__quiet-button grid size-9 place-items-center rounded-md" onClick={() => setIsCreateOpen(false)}><X className="size-5" /></button>
             </header>
 
             <div className="space-y-7 px-6 py-6 sm:px-8">
               <section>
-                <h3 className="workspace-home__muted-text text-xs font-bold uppercase tracking-[0.13em]">Tamaños estándar</h3>
+                <h3 className="workspace-home__muted-text text-xs font-bold uppercase tracking-[0.13em]">{t("workspace.standardSizes")}</h3>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {DESIGN_FORMATS.map((format) => {
                     const isSelected = selectedFormatId === format.id && unit === "px" && Number(width) === format.size.width && Number(height) === format.size.height
@@ -211,7 +215,7 @@ export function WorkspaceHome({
                         <span className="workspace-home__format-icon grid h-12 w-14 place-items-center rounded-md">
                           <span className="workspace-home__format-ratio block border" style={{ width: format.size.width >= format.size.height ? 32 : 22, height: format.size.height >= format.size.width ? 32 : 22 }} />
                         </span>
-                        <span className="min-w-0 flex-1"><span className="workspace-home__primary-text block font-semibold">{format.name}</span><span className="workspace-home__muted-text text-sm">{format.size.width} × {format.size.height} px</span></span>
+                        <span className="min-w-0 flex-1"><span className="workspace-home__primary-text block font-semibold">{getLocalizedDesignFormatName(locale, format.id, format.name)}</span><span className="workspace-home__muted-text text-sm">{format.size.width} × {format.size.height} px</span></span>
                         {isSelected ? <Check className="workspace-home__accent-text size-5" /> : null}
                       </button>
                     )
@@ -220,17 +224,17 @@ export function WorkspaceHome({
               </section>
 
               <section className="workspace-home__custom-size rounded-md border p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="workspace-home__primary-text font-semibold">Tamaño personalizado</h3><div className="workspace-home__unit-switcher flex rounded-md p-1">{(["px", "cm"] as const).map((value) => <button key={value} type="button" className="workspace-home__unit-button rounded-sm px-4 py-1.5 text-sm font-semibold" data-selected={unit === value} onClick={() => setUnit(value)}>{value}</button>)}</div></div>
+                <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="workspace-home__primary-text font-semibold">{t("workspace.customSize")}</h3><div className="workspace-home__unit-switcher flex rounded-md p-1">{(["px", "cm"] as const).map((value) => <button key={value} type="button" className="workspace-home__unit-button rounded-sm px-4 py-1.5 text-sm font-semibold" data-selected={unit === value} onClick={() => setUnit(value)}>{value}</button>)}</div></div>
                 <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                  <label className="workspace-home__field-label text-sm">Ancho<input type="number" min="0" step={unit === "cm" ? "0.1" : "1"} value={width} onChange={(event) => setWidth(event.target.value)} className="workspace-home__field mt-2 h-11 w-full rounded-md border px-3 outline-none" /></label>
-                  <label className="workspace-home__field-label text-sm">Alto<input type="number" min="0" step={unit === "cm" ? "0.1" : "1"} value={height} onChange={(event) => setHeight(event.target.value)} className="workspace-home__field mt-2 h-11 w-full rounded-md border px-3 outline-none" /></label>
-                  <label className="workspace-home__field-label text-sm" data-disabled={unit === "px"}>Resolución (ppp)<input type="number" min="72" max="600" step="1" value={dpi} disabled={unit === "px"} onChange={(event) => setDpi(event.target.value)} className="workspace-home__field mt-2 h-11 w-full rounded-md border px-3 outline-none disabled:opacity-40" /></label>
+                  <label className="workspace-home__field-label text-sm">{t("workspace.width")}<input type="number" min="0" step={unit === "cm" ? "0.1" : "1"} value={width} onChange={(event) => setWidth(event.target.value)} className="workspace-home__field mt-2 h-11 w-full rounded-md border px-3 outline-none" /></label>
+                  <label className="workspace-home__field-label text-sm">{t("workspace.height")}<input type="number" min="0" step={unit === "cm" ? "0.1" : "1"} value={height} onChange={(event) => setHeight(event.target.value)} className="workspace-home__field mt-2 h-11 w-full rounded-md border px-3 outline-none" /></label>
+                  <label className="workspace-home__field-label text-sm" data-disabled={unit === "px"}>{t("workspace.resolutionDpi")}<input type="number" min="72" max="600" step="1" value={dpi} disabled={unit === "px"} onChange={(event) => setDpi(event.target.value)} className="workspace-home__field mt-2 h-11 w-full rounded-md border px-3 outline-none disabled:opacity-40" /></label>
                 </div>
-                <p className="workspace-home__size-message mt-4 text-sm" data-error={Boolean(customResult.error)}>{customResult.error || `El lienzo se creará a ${customResult.size?.width} × ${customResult.size?.height} píxeles${unit === "cm" ? ` a ${dpi} ppp` : ""}.`}</p>
+                <p className="workspace-home__size-message mt-4 text-sm" data-error={Boolean(customResult.error)}>{customResult.error || t(unit === "cm" ? "workspace.canvasSizeDpi" : "workspace.canvasSize", { width: customResult.size?.width ?? 0, height: customResult.size?.height ?? 0, dpi })}</p>
               </section>
             </div>
 
-            <footer className="workspace-home__modal-footer flex justify-end gap-3 border-t px-6 py-5 sm:px-8"><button type="button" className="workspace-home__quiet-button rounded-md px-5 py-2.5 font-semibold" onClick={() => setIsCreateOpen(false)}>Cancelar</button><button type="button" disabled={!customResult.size} className="workspace-home__primary-button rounded-md px-6 py-2.5 font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={createDesign}>Crear diseño</button></footer>
+            <footer className="workspace-home__modal-footer flex justify-end gap-3 border-t px-6 py-5 sm:px-8"><button type="button" className="workspace-home__quiet-button rounded-md px-5 py-2.5 font-semibold" onClick={() => setIsCreateOpen(false)}>{t("workspace.cancel")}</button><button type="button" disabled={!customResult.size} className="workspace-home__primary-button rounded-md px-6 py-2.5 font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={createDesign}>{t("workspace.createDesign")}</button></footer>
           </section>
         </div>
       ) : null}

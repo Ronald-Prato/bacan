@@ -11,6 +11,8 @@ import { useEffect, useState, type ReactNode } from "react"
 
 import { SessionAvatarProvider } from "./session-avatar"
 import { CALLBACK_PATH, LOGIN_PATH, safeReturnTo } from "./redirects"
+import { useI18n } from "@/i18n/i18n-context"
+import { LanguageSelector } from "@/components/ui/language-selector"
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined
@@ -62,6 +64,7 @@ function GitHubMark() {
 }
 
 function LoginPage() {
+  const { tx } = useI18n()
   const { isLoaded, signIn } = useSignIn()
   const [pendingProvider, setPendingProvider] = useState<OAuthProvider>()
   const [error, setError] = useState("")
@@ -81,18 +84,19 @@ function LoginPage() {
       })
     } catch {
       setPendingProvider(undefined)
-      setError("No se pudo abrir el inicio de sesión. Inténtalo de nuevo.")
+      setError(tx("No se pudo abrir el inicio de sesión. Inténtalo de nuevo."))
     }
   }
 
   return (
     <main className="bacan-auth-page">
+      <LanguageSelector className="bacan-auth-language" />
       <section className="bacan-auth-card" aria-labelledby="bacan-auth-title">
         <div className="bacan-auth-mark" aria-hidden="true">B</div>
         <p className="bacan-auth-eyebrow">Bacan</p>
-        <h1 id="bacan-auth-title">Accede a tu espacio</h1>
+        <h1 id="bacan-auth-title">{tx("Accede a tu espacio")}</h1>
         <p className="bacan-auth-description">
-          Tus diseños, recursos y versiones quedan protegidos y vinculados a tu cuenta.
+          {tx("Tus diseños, recursos y versiones quedan protegidos y vinculados a tu cuenta.")}
         </p>
 
         <div className="bacan-auth-actions">
@@ -102,7 +106,7 @@ function LoginPage() {
             onClick={() => void signInWith("google")}
           >
             <GoogleMark />
-            {pendingProvider === "google" ? "Abriendo Google…" : "Continuar con Google"}
+            {tx(pendingProvider === "google" ? "Abriendo Google…" : "Continuar con Google")}
           </button>
           <button
             type="button"
@@ -110,7 +114,7 @@ function LoginPage() {
             onClick={() => void signInWith("github")}
           >
             <GitHubMark />
-            {pendingProvider === "github" ? "Abriendo GitHub…" : "Continuar con GitHub"}
+            {tx(pendingProvider === "github" ? "Abriendo GitHub…" : "Continuar con GitHub")}
           </button>
         </div>
 
@@ -121,10 +125,11 @@ function LoginPage() {
   )
 }
 
-function AuthStatus({ message = "Verificando tu sesión…" }: { message?: string }) {
+function AuthStatus({ message }: { message?: string }) {
+  const { tx } = useI18n()
   return (
     <main className="bacan-auth-page">
-      <div className="bacan-auth-status" role="status">{message}</div>
+      <div className="bacan-auth-status" role="status">{tx(message ?? "Verificando tu sesión…")}</div>
     </main>
   )
 }

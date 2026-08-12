@@ -11,6 +11,7 @@ import {
   type ShapeRenderDescriptor,
 } from "@/editor/shapes"
 import { cn } from "@/lib/utils"
+import { useI18n } from "@/i18n/i18n-context"
 
 import { startShapeDrag } from "./shape-drag-preview"
 
@@ -134,6 +135,7 @@ function ShapeTile({
   onOverflow?: () => void
   onAddShape: (item: ShapeCatalogItem) => void
 }) {
+  const { tx } = useI18n()
   const handleDragStart = (event: DragEvent<HTMLButtonElement>) => {
     startShapeDrag(event.dataTransfer, event.currentTarget, item)
   }
@@ -144,7 +146,7 @@ function ShapeTile({
       draggable
       className="shapes-panel__tile group relative grid size-14 shrink-0 place-items-center rounded-md border text-foreground transition-colors hover:border-[var(--shapes-accent)] focus-visible:border-[var(--shapes-accent)] focus-visible:outline-2 focus-visible:outline-[var(--shapes-accent)] disabled:cursor-not-allowed"
       style={{ borderColor: panelBorder, backgroundColor: panelSubsurface, color: panelForeground }}
-      aria-label={isOverflow ? "Ver todas las formas" : `Agregar ${item.label}`}
+      aria-label={isOverflow ? tx("Ver todas las formas") : `${tx("Agregar")} ${item.label}`}
       aria-expanded={isOverflow ? false : undefined}
       title={item.label}
       onClick={() => isOverflow && onOverflow ? onOverflow() : onAddShape(item)}
@@ -179,6 +181,7 @@ function ShapeSection({
   onAddShape: (item: ShapeCatalogItem) => void
   showViewAll?: boolean
 }) {
+  const { tx } = useI18n()
   if (items.length === 0) {
     return null
   }
@@ -201,7 +204,7 @@ function ShapeSection({
             aria-controls={`shapes-grid-${category.id}`}
             onClick={onToggle}
           >
-            {expanded ? "Ver menos" : "Ver todo"}
+            {tx(expanded ? "Ver menos" : "Ver todo")}
           </button>
         ) : null}
       </div>
@@ -229,29 +232,31 @@ export function ShapesPanel({
   onBack,
   className,
 }: ShapesPanelProps) {
+  const { tx } = useI18n()
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null)
   const [liveMessage, setLiveMessage] = useState("")
   const [liveMessageId, setLiveMessageId] = useState(0)
   const recent = recentItems ?? listRecentShapes(recentShapeTypes, 5)
   const categories = useMemo(
     () => SHAPE_CATEGORIES.map((category) => ({
-      category,
-      items: category.isDynamic ? recent : items.filter((item) => item.category === category.id),
+      category: { ...category, label: tx(category.label) },
+      items: (category.isDynamic ? recent : items.filter((item) => item.category === category.id))
+        .map((item) => ({ ...item, label: tx(item.label) })),
     })),
-    [items, recent],
+    [items, recent, tx],
   )
   const hasResults = categories.some(({ items: categoryItems }) => categoryItems.length > 0)
 
   const handleAddShape = (item: ShapeCatalogItem) => {
     onAddShape(item)
-    setLiveMessage(`Se agregó ${item.label}`)
+    setLiveMessage(`${tx("Se agregó")} ${item.label}`)
     setLiveMessageId((current) => current + 1)
   }
 
   return (
     <section
       className={cn("shapes-panel flex min-h-0 flex-col", className)}
-      aria-label="Formas"
+      aria-label={tx("Formas")}
     >
       <header className="shapes-panel__header shrink-0 space-y-4">
         <div className="flex h-5 items-center gap-3">
@@ -259,20 +264,20 @@ export function ShapesPanel({
             type="button"
             className="grid size-7 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-[var(--shapes-accent)] disabled:opacity-50"
             style={{ color: panelForeground }}
-            aria-label="Volver"
+            aria-label={tx("Volver")}
             disabled={!onBack}
             onClick={onBack}
           >
             <ChevronLeft className="size-5" />
           </button>
-          <h1 className="text-base font-semibold">Formas</h1>
+          <h1 className="text-base font-semibold">{tx("Formas")}</h1>
         </div>
       </header>
 
       <div className="shapes-panel__catalog min-h-0 flex-1 overflow-y-auto overscroll-contain py-5" tabIndex={0}>
         {!hasResults ? (
           <p className="rounded-md border p-4 text-sm" style={{ borderColor: panelBorder, color: panelMuted }} role="status">
-            No hay formas disponibles.
+            {tx("No hay formas disponibles.")}
           </p>
         ) : null}
         <div className="space-y-7">

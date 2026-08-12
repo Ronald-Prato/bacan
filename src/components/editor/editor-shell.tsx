@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { LanguageSelector } from "@/components/ui/language-selector"
+import { useI18n } from "@/i18n/i18n-context"
 import { cn } from "@/lib/utils"
 
 export type EditorToolItem<TToolId extends string> = {
@@ -42,6 +44,7 @@ export function EditorTopBar({
   onThemeChange,
   theme,
 }: EditorTopBarProps) {
+  const { t } = useI18n()
   return (
     <header className="editor-topbar sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-white/8 bg-[#101316] px-3 text-[#f6f7ef]">
       <div className="flex min-w-0 items-center gap-2">
@@ -51,13 +54,13 @@ export function EditorTopBar({
               size="icon-lg"
               variant="ghost"
               className="editor-topbar__action text-[#dce3d7] hover:bg-[#1a2020] hover:text-white"
-              aria-label="Inicio"
+              aria-label={t("editor.home")}
               onClick={onHome}
             >
               <Home />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Inicio</TooltipContent>
+          <TooltipContent>{t("editor.home")}</TooltipContent>
         </Tooltip>
         <Button
           variant="ghost"
@@ -65,7 +68,7 @@ export function EditorTopBar({
           onClick={onSave}
           disabled={!canSave}
         >
-          Guardar
+          {t("editor.save")}
         </Button>
         {/* Redimensionado pausado hasta retomar la implementación de esta funcionalidad.
         <Button
@@ -86,18 +89,19 @@ export function EditorTopBar({
           value={documentName}
           onChange={(event) => onDocumentNameChange(event.target.value)}
           className="h-9 max-w-[380px] rounded-md border-white/8 bg-[#171b1e] text-center text-sm font-semibold text-[#f6f7ef] placeholder:text-white/40 focus-visible:border-[#9cff6d]/60 focus-visible:ring-[#9cff6d]/20"
-          aria-label="Nombre del diseno"
+          aria-label={t("editor.designName")}
         />
       </div>
 
       <div className="flex items-center gap-2">
         {exportControl}
-        <div className="editor-theme-switcher flex items-center rounded-lg border border-white/10 bg-white/5 p-1" aria-label="Tema del editor">
+        <LanguageSelector className="editor-language-selector" />
+        <div className="editor-theme-switcher flex items-center rounded-lg border border-white/10 bg-white/5 p-1" aria-label={t("theme.editor")}>
           <Button
             size="icon-sm"
             variant="ghost"
             className={theme === "light" ? "bg-white text-slate-900 hover:bg-white" : "text-slate-400"}
-            aria-label="Usar tema claro"
+            aria-label={t("theme.light")}
             aria-pressed={theme === "light"}
             onClick={() => onThemeChange("light")}
           >
@@ -107,7 +111,7 @@ export function EditorTopBar({
             size="icon-sm"
             variant="ghost"
             className={theme === "dark" ? "bg-slate-700 text-white hover:bg-slate-700" : "text-slate-400"}
-            aria-label="Usar tema oscuro"
+            aria-label={t("theme.dark")}
             aria-pressed={theme === "dark"}
             onClick={() => onThemeChange("dark")}
           >
@@ -120,13 +124,13 @@ export function EditorTopBar({
               size="icon-lg"
               variant="ghost"
               className="editor-topbar__comments border border-transparent text-[#dce3d7] hover:bg-[#1a2020] hover:text-white"
-              aria-label="Comentarios"
+              aria-label={t("editor.comments")}
               onClick={onComments}
             >
               <MessageCircle />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Comentarios</TooltipContent>
+          <TooltipContent>{t("editor.comments")}</TooltipContent>
         </Tooltip>
         {accountMenu}
       </div>
@@ -190,6 +194,7 @@ type EditorContextSidebarProps = {
 }
 
 export function EditorContextSidebar({ badgeLabel, children, immersive = false, title }: EditorContextSidebarProps) {
+  const { t } = useI18n()
   return (
     <aside className={cn(
       "editor-context-sidebar hidden min-h-0 min-w-0 flex-col border-r border-white/8 bg-[#121619] lg:flex",
@@ -198,7 +203,7 @@ export function EditorContextSidebar({ badgeLabel, children, immersive = false, 
       {!immersive ? (
         <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9cff6d]">Panel</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9cff6d]">{t("editor.panel")}</p>
             <h2 className="text-sm font-bold text-[#f6f7ef]">{title}</h2>
           </div>
           {badgeLabel ? (
@@ -259,11 +264,12 @@ type EditorFooterProps = {
 }
 
 export function EditorFooter({ activePageLabel, zoomLabel }: EditorFooterProps) {
+  const { t } = useI18n()
   return (
     <footer className="editor-workspace-footer flex h-14 items-center justify-end border-t border-white/8 bg-[#101417] px-5 text-sm font-bold text-[#8e9995]">
       <div className="flex items-center gap-4">
         <span>{zoomLabel}</span>
-        <span>Paginas</span>
+        <span>{t("editor.pages")}</span>
         <span>{activePageLabel}</span>
       </div>
     </footer>

@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { useI18n } from "@/i18n/i18n-context"
 
 const SessionAvatarContext = createContext<ReactNode>(null)
 
@@ -30,6 +31,7 @@ export function SessionAvatarMenu({
   email?: string
   onSignOut: () => void | Promise<void>
 }) {
+  const { tx } = useI18n()
   const [open, setOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -69,7 +71,7 @@ export function SessionAvatarMenu({
         ref={triggerRef}
         type="button"
         className="bacan-session-avatar__trigger"
-        aria-label={`Abrir menú de sesión de ${label}`}
+        aria-label={`${tx("Abrir menú de sesión de")} ${label}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -97,7 +99,7 @@ export function SessionAvatarMenu({
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5" />
             </svg>
-            {signingOut ? "Cerrando sesión…" : "Cerrar sesión"}
+            {tx(signingOut ? "Cerrando sesión…" : "Cerrar sesión")}
           </button>
         </div>
       ) : null}
@@ -106,11 +108,12 @@ export function SessionAvatarMenu({
 }
 
 export function SessionAvatarProvider({ children }: { children: ReactNode }) {
+  const { tx } = useI18n()
   const { user } = useUser()
   const { signOut } = useClerk()
   const name = user?.fullName ?? undefined
   const email = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress
-  const label = name ?? email ?? "tu cuenta"
+  const label = name ?? email ?? tx("tu cuenta")
   const initial = user?.firstName?.trim().charAt(0) || label.trim().charAt(0) || "B"
 
   return (

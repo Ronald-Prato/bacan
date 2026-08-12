@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
+import { useI18n } from "@/i18n/i18n-context"
 
 const MAX_BROWSER_EXPORT_DIMENSION = 16_384
 
@@ -38,6 +39,7 @@ export function ExportMenu({
   pageCount,
   theme,
 }: ExportMenuProps) {
+  const { tx } = useI18n()
   const [open, setOpen] = useState(false)
   const outputSize = getExportOutputSize(documentSize, options.scale)
   const selectedPageCount = options.pageSelection === "all" ? pageCount : 1
@@ -58,10 +60,10 @@ export function ExportMenu({
           type="button"
           className="editor-export-trigger"
           disabled={isExporting || pageCount === 0}
-          aria-label="Exportar diseño"
+          aria-label={tx("Exportar diseño")}
         >
           <Download data-icon="inline-start" />
-          <span className="hidden sm:inline">Exportar</span>
+          <span className="hidden sm:inline">{tx("Exportar")}</span>
         </Button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -71,39 +73,39 @@ export function ExportMenu({
           collisionPadding={12}
           className="editor-export-menu"
           data-theme={theme}
-          aria-label="Opciones de exportación"
+          aria-label={tx("Opciones de exportación")}
         >
           <header className="editor-export-menu__header">
             <div>
-              <h2>Exportar diseño</h2>
-              <p>Elige páginas, formato y resolución.</p>
+              <h2>{tx("Exportar diseño")}</h2>
+              <p>{tx("Elige páginas, formato y resolución.")}</p>
             </div>
             <Popover.Close asChild>
-              <Button type="button" size="icon-sm" variant="ghost" aria-label="Cerrar exportación">
+              <Button type="button" size="icon-sm" variant="ghost" aria-label={tx("Cerrar exportación")}>
                 <X />
               </Button>
             </Popover.Close>
           </header>
 
           <div className="editor-export-menu__section">
-            <Label>Páginas</Label>
-            <div className="editor-export-segmented" role="group" aria-label="Páginas para exportar">
+            <Label>{tx("Páginas")}</Label>
+            <div className="editor-export-segmented" role="group" aria-label={tx("Páginas para exportar")}>
               <PageSelectionButton
                 checked={options.pageSelection === "all"}
-                label={`Todas (${pageCount})`}
+                label={`${tx("Todas")} (${pageCount})`}
                 onClick={() => updateOptions({ pageSelection: "all" })}
               />
               <PageSelectionButton
                 checked={options.pageSelection === "current"}
-                label={`Actual (${activePageNumber})`}
+                label={`${tx("Actual")} (${activePageNumber})`}
                 onClick={() => updateOptions({ pageSelection: "current" })}
               />
             </div>
           </div>
 
           <div className="editor-export-menu__section">
-            <Label>Tipo de archivo</Label>
-            <div className="editor-export-formats" role="group" aria-label="Tipo de archivo">
+            <Label>{tx("Tipo de archivo")}</Label>
+            <div className="editor-export-formats" role="group" aria-label={tx("Tipo de archivo")}>
               {EXPORT_FORMATS.map((format) => (
                 <button
                   key={format.id}
@@ -114,7 +116,7 @@ export function ExportMenu({
                   onClick={() => updateOptions({ format: format.id })}
                 >
                   <span>{format.label}</span>
-                  <small>{getFormatDescription(format.id)}</small>
+                  <small>{tx(getFormatDescription(format.id))}</small>
                   {options.format === format.id ? <Check aria-hidden="true" /> : null}
                 </button>
               ))}
@@ -122,7 +124,7 @@ export function ExportMenu({
           </div>
 
           <div className="editor-export-menu__section">
-            <Label htmlFor="export-resolution">Resolución</Label>
+            <Label htmlFor="export-resolution">{tx("Resolución")}</Label>
             <select
               id="export-resolution"
               value={options.scale}
@@ -134,7 +136,7 @@ export function ExportMenu({
 
                 return (
                   <option key={resolution.scale} value={resolution.scale} disabled={isTooLarge}>
-                    {resolution.label} · {size.width} × {size.height}px
+                    {tx(resolution.label)} · {size.width} × {size.height}px
                   </option>
                 )
               })}
@@ -144,7 +146,7 @@ export function ExportMenu({
           {options.format === "jpg" ? (
             <div className="editor-export-menu__section">
               <div className="editor-export-menu__label-row">
-                <Label>Calidad</Label>
+                <Label>{tx("Calidad")}</Label>
                 <span>{Math.round(options.quality * 100)}%</span>
               </div>
               <Slider
@@ -153,7 +155,7 @@ export function ExportMenu({
                 max={1}
                 step={0.05}
                 onValueChange={([quality]) => updateOptions({ quality })}
-                aria-label="Calidad JPG"
+                aria-label={`${tx("Calidad")} JPG`}
               />
             </div>
           ) : null}
@@ -162,12 +164,12 @@ export function ExportMenu({
             <div className="editor-export-menu__summary">
               {options.format === "pdf" ? <FileArchive aria-hidden="true" /> : <ImageIcon aria-hidden="true" />}
               <span>
-                {selectedPageCount} {selectedPageCount === 1 ? "página" : "páginas"} · {outputSize.width} × {outputSize.height}px
+                {selectedPageCount} {selectedPageCount === 1 ? tx("página") : tx("páginas")} · {outputSize.width} × {outputSize.height}px
               </span>
             </div>
             <Button type="button" className="editor-export-menu__submit" onClick={startExport} disabled={isExporting}>
               <Download data-icon="inline-start" />
-              {options.pageSelection === "all" && pageCount > 1 ? "Exportar todo" : "Exportar diseño"}
+              {tx(options.pageSelection === "all" && pageCount > 1 ? "Exportar todo" : "Exportar diseño")}
             </Button>
           </footer>
           <Popover.Arrow className="editor-export-menu__arrow" />
@@ -219,6 +221,7 @@ export function ExportProgressToast({
   exportProgress: ExportProgress | null
   onClose: () => void
 }) {
+  const { tx } = useI18n()
   if (!exportProgress) {
     return null
   }
@@ -243,9 +246,9 @@ export function ExportProgressToast({
       <div className="editor-export-toast__content">
         <div className="editor-export-toast__title-row">
           <strong>
-            {isComplete ? "🎉 Diseño exportado" : isError ? "No se pudo exportar" : "Exportando diseño"}
+            {isComplete ? `🎉 ${tx("Diseño exportado")}` : tx(isError ? "No se pudo exportar" : "Exportando diseño")}
           </strong>
-          <button type="button" aria-label="Cerrar progreso de exportación" onClick={onClose}>
+          <button type="button" aria-label={tx("Cerrar progreso de exportación")} onClick={onClose}>
             <X />
           </button>
         </div>
@@ -253,7 +256,7 @@ export function ExportProgressToast({
         <div
           className="editor-export-toast__progress"
           role="progressbar"
-          aria-label="Progreso de exportación"
+          aria-label={tx("Progreso de exportación")}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(exportProgress.progress)}
