@@ -13,17 +13,22 @@ import {
   AlignVerticalJustifyEnd,
   AlignVerticalJustifyStart,
   AlignVerticalSpaceBetween,
+  Accessibility,
   BringToFront,
   ChevronDown,
   Circle,
   Clock,
   CloudUpload,
+  ClipboardPaste,
+  Copy,
   CopyPlus,
   Download,
   Eye,
   EyeOff,
   Image as ImageIcon,
   Layers3,
+  Languages,
+  Link2,
   Lock,
   MessageCircle,
   MousePointer2,
@@ -39,9 +44,6 @@ import {
   Triangle,
   Type,
   Redo2,
-  SendToBack,
-  StepBack,
-  StepForward,
   Undo2,
   WandSparkles,
   type LucideIcon,
@@ -83,7 +85,6 @@ import {
   duplicateElementBehind,
   findElement,
   findSelectedElements,
-  getElementLayerPosition,
   getSelectionElementIds,
   groupElements,
   insertPageAfter,
@@ -177,6 +178,12 @@ import {
 import { filterSearchItems } from "@/editor/search"
 import { snapElementPosition, type SnapGuide } from "@/editor/snapping"
 import { getEditorWheelZoom, getZoomedScrollPosition } from "@/editor/zoom"
+import { getContextMenuActions, type ContextMenuActionId } from "@/editor/context-menu"
+import {
+  copyElementsToClipboard,
+  pasteElementsFromClipboard,
+  type ElementClipboard,
+} from "@/editor/element-clipboard"
 import {
   DESIGN_FORMATS,
   createBlankDocumentForFormat,
@@ -197,6 +204,7 @@ import {
 } from "@/editor/export"
 import { WorkspaceHome } from "@/components/dashboard/workspace-home"
 import { CanvasContextMenu } from "@/components/editor/canvas-context-menu"
+import { ElementMetadataDialog } from "@/components/editor/element-metadata-dialog"
 import {
   EditorContextSidebar,
   EditorFooter,
@@ -239,6 +247,12 @@ type ProjectPersistence = {
   saveProject: (projectId: string | null, document: EditorDocument) => Promise<string | null>
   loadProject: (projectId: string) => Promise<EditorDocument | null>
 }
+type ElementMetadataEditor = {
+  kind: "link" | "altText"
+  pageId: string
+  elementIds: string[]
+  value: string
+} | null
 type ProjectVersionPersistence = {
   isEnabled: boolean
   isLoading: boolean
@@ -1008,6 +1022,8 @@ function EditorApp({
   const [removingPageId, setRemovingPageId] = useState<string | null>(null)
   const [selection, setSelection] = useState<Selection>(null)
   const [elementContextMenu, setElementContextMenu] = useState<ElementContextMenu>(null)
+  const [elementClipboard, setElementClipboard] = useState<ElementClipboard>({ elements: [] })
+  const [elementMetadataEditor, setElementMetadataEditor] = useState<ElementMetadataEditor>(null)
   const [editingText, setEditingText] = useState("")
   const [snapPreview, setSnapPreview] = useState<SnapPreview>(null)
   const [dragSelection, setDragSelection] = useState<DragSelection>(null)
@@ -1119,13 +1135,6 @@ function EditorApp({
     ? createDragSelectionBounds(dragSelection.start, dragSelection.end)
     : null
   const showSelectionControls = !isExporting
-  const contextMenuLayerPosition = useMemo(
-    () =>
-      elementContextMenu
-        ? getElementLayerPosition(document, elementContextMenu.pageId, elementContextMenu.elementId)
-        : null,
-    [document, elementContextMenu],
-  )
   const contextMenuElement = useMemo(
     () =>
       elementContextMenu
@@ -1134,6 +1143,23 @@ function EditorApp({
             ?.elements.find((element) => element.id === elementContextMenu.elementId) ?? null
         : null,
     [document, elementContextMenu],
+  )
+  const contextMenuActions = useMemo(
+    () => getContextMenuActions({
+      document,
+      selection: elementContextMenu ? selection : null,
+      hasClipboardElements: elementClipboard.elements.length > 0,
+      capabilities: {
+        comment: true,
+        link: true,
+        "alt-text": true,
+      },
+    }),
+    [document, elementClipboard.elements.length, elementContextMenu, selection],
+  )
+  const contextMenuActionById = useMemo(
+    () => Object.fromEntries(contextMenuActions.map((action) => [action.id, action])) as Record<ContextMenuActionId, (typeof contextMenuActions)[number]>,
+    [contextMenuActions],
   )
 
   const closeElementContextMenu = useCallback(() => setElementContextMenu(null), [])
@@ -1908,47 +1934,85 @@ function EditorApp({
     position: { x: number; y: number },
   ) => {
     setActivePageId(pageId)
-    setSelection({ pageId, elementId })
+    setSelection((currentSelection) =>
+      selectionIncludesElement(currentSelection, pageId, elementId)
+        ? currentSelection
+        : createSelectionForElement(document, pageId, elementId),
+    )
     setSnapPreview(null)
     setElementContextMenu({ pageId, elementId, ...position })
   }
 
-  const updateContextMenuElement = (
-    update: (document: EditorDocument, pageId: string, elementId: string) => EditorDocument,
-  ) => {
-    if (!elementContextMenu) {
-      return
-    }
-
-    const { pageId, elementId } = elementContextMenu
-    setDocument((currentDocument) => update(currentDocument, pageId, elementId))
-  }
-
   const duplicateContextMenuElement = () => {
-    if (!elementContextMenu) {
+    if (!elementContextMenu || !selection) {
       return
     }
 
-    const { pageId, elementId } = elementContextMenu
-    setDocument((currentDocument) => {
-      const result = duplicateElements(currentDocument, pageId, [elementId], createId)
-
-      if (result.duplicatedIds[0]) {
-        setSelection({ pageId, elementId: result.duplicatedIds[0] })
-      }
-
-      return result.document
-    })
+    const pageId = selection.pageId
+    const result = duplicateElements(document, pageId, selectedElementIds, createId)
+    setDocument(result.document)
+    setSelection(createMultiSelection(pageId, result.duplicatedIds))
   }
 
   const removeContextMenuElement = () => {
-    if (!elementContextMenu) {
+    if (!elementContextMenu || !selection) {
       return
     }
 
-    const { pageId, elementId } = elementContextMenu
-    setDocument((currentDocument) => deleteElements(currentDocument, pageId, [elementId]))
+    const pageId = selection.pageId
+    setDocument((currentDocument) => deleteElements(currentDocument, pageId, selectedElementIds))
     setSelection(null)
+  }
+
+  const copySelectedElements = () => {
+    if (selectedElements.length === 0) {
+      return
+    }
+
+    setElementClipboard(copyElementsToClipboard(selectedElements))
+  }
+
+  const pasteCopiedElements = () => {
+    const pageId = selection?.pageId ?? activePage?.id
+
+    if (!pageId || elementClipboard.elements.length === 0) {
+      return
+    }
+
+    const result = pasteElementsFromClipboard(document, pageId, elementClipboard, createId)
+    setDocument(result.document)
+    setSelection(createMultiSelection(pageId, result.pastedIds))
+  }
+
+  const openElementMetadataEditor = (kind: "link" | "altText") => {
+    if (!selection || selectedElementIds.length === 0) {
+      return
+    }
+
+    const field = kind === "link" ? "link" : "altText"
+    const value = selectedElements.length === 1 ? selectedElements[0][field] ?? "" : ""
+    setElementMetadataEditor({ kind, pageId: selection.pageId, elementIds: selectedElementIds, value })
+  }
+
+  const saveElementMetadata = () => {
+    if (!elementMetadataEditor) {
+      return
+    }
+
+    const { kind, pageId, elementIds, value } = elementMetadataEditor
+    const normalizedValue = value.trim() || undefined
+    setDocument((currentDocument) =>
+      elementIds.reduce(
+        (nextDocument, elementId) => updateElement(
+          nextDocument,
+          pageId,
+          elementId,
+          kind === "link" ? { link: normalizedValue } : { altText: normalizedValue },
+        ),
+        currentDocument,
+      ),
+    )
+    setElementMetadataEditor(null)
   }
 
   const removeSelected = () => {
@@ -1965,15 +2029,9 @@ function EditorApp({
       return
     }
 
-    setDocument((currentDocument) => {
-      const result = duplicateElements(currentDocument, selection.pageId, selectedElementIds, createId)
-
-      if (result.duplicatedIds.length > 0) {
-        setSelection(createMultiSelection(selection.pageId, result.duplicatedIds))
-      }
-
-      return result.document
-    })
+    const result = duplicateElements(document, selection.pageId, selectedElementIds, createId)
+    setDocument(result.document)
+    setSelection(createMultiSelection(selection.pageId, result.duplicatedIds))
   }
 
   const moveSelectedForward = () => {
@@ -2158,6 +2216,18 @@ function EditorApp({
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
         event.preventDefault()
         selectEveryElementOnActivePage()
+        return
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c") {
+        event.preventDefault()
+        copySelectedElements()
+        return
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
+        event.preventDefault()
+        pasteCopiedElements()
         return
       }
 
@@ -3367,55 +3437,138 @@ function EditorApp({
           </div>
         ) : null}
 
-        {elementContextMenu && contextMenuLayerPosition && contextMenuElement ? (
+        {elementContextMenu && contextMenuElement ? (
           <CanvasContextMenu
             x={elementContextMenu.x}
             y={elementContextMenu.y}
             onClose={closeElementContextMenu}
             items={[
               {
+                id: "copy",
+                label: "Copiar",
+                icon: Copy,
+                shortcut: "⌘C",
+                disabled: !contextMenuActionById.copy.enabled,
+                onSelect: copySelectedElements,
+              },
+              {
+                id: "paste",
+                label: "Pegar",
+                icon: ClipboardPaste,
+                shortcut: "⌘V",
+                disabled: !contextMenuActionById.paste.enabled,
+                onSelect: pasteCopiedElements,
+              },
+              {
+                id: "duplicate",
                 label: "Duplicar",
                 icon: CopyPlus,
+                shortcut: "⌘D",
+                disabled: !contextMenuActionById.duplicate.enabled,
                 onSelect: duplicateContextMenuElement,
               },
               {
-                label: "Traer adelante",
-                icon: StepForward,
-                disabled: contextMenuLayerPosition.isFront,
-                onSelect: () => updateContextMenuElement(moveElementForward),
-              },
-              {
-                label: "Enviar atras",
-                icon: StepBack,
-                disabled: contextMenuLayerPosition.isBack,
-                onSelect: () => updateContextMenuElement(moveElementBackward),
-              },
-              {
-                label: "Traer al frente",
-                icon: BringToFront,
-                disabled: contextMenuLayerPosition.isFront,
-                onSelect: () => updateContextMenuElement(moveElementToFront),
-              },
-              {
-                label: "Enviar al fondo",
-                icon: SendToBack,
-                disabled: contextMenuLayerPosition.isBack,
-                onSelect: () => updateContextMenuElement(moveElementToBack),
-              },
-              {
-                label: contextMenuElement.locked ? "Desbloquear" : "Bloquear",
-                icon: Lock,
-                separatorBefore: true,
-                onSelect: () => updateContextMenuElement(toggleElementLocked),
-              },
-              {
+                id: "delete",
                 label: "Eliminar",
                 icon: Trash2,
+                shortcut: "Delete",
                 destructive: true,
-                separatorBefore: true,
+                disabled: !contextMenuActionById.delete.enabled,
                 onSelect: removeContextMenuElement,
               },
+              {
+                id: "align",
+                label: "Alinear a la página",
+                icon: AlignHorizontalJustifyCenter,
+                separatorBefore: true,
+                disabled: !contextMenuActionById.align.enabled,
+                submenu: [
+                  { label: "Izquierda", icon: AlignHorizontalJustifyStart, onSelect: () => alignSelectedToCanvas("left") },
+                  { label: "Centro", icon: AlignHorizontalJustifyCenter, onSelect: () => alignSelectedToCanvas("center") },
+                  { label: "Derecha", icon: AlignHorizontalJustifyEnd, onSelect: () => alignSelectedToCanvas("right") },
+                  { label: "Arriba", icon: AlignVerticalJustifyStart, separatorBefore: true, onSelect: () => alignSelectedToCanvas("top") },
+                  { label: "Medio", icon: AlignVerticalJustifyCenter, onSelect: () => alignSelectedToCanvas("middle") },
+                  { label: "Abajo", icon: AlignVerticalJustifyEnd, onSelect: () => alignSelectedToCanvas("bottom") },
+                ],
+              },
+              {
+                id: "create-component",
+                label: "Crear un componente",
+                icon: Shapes,
+                premium: true,
+                disabled: !contextMenuActionById["create-component"].enabled,
+                separatorBefore: true,
+              },
+              ...(contextMenuActionById.comment.visible ? [{
+                id: "comment",
+                label: "Comentar",
+                icon: MessageCircle,
+                shortcut: "⌥⌘N",
+                disabled: !contextMenuActionById.comment.enabled,
+                onSelect: () => setActiveTool("comments"),
+              }] : []),
+              {
+                id: "lock",
+                label: allSelectedLocked ? "Desbloquear" : "Bloquear",
+                icon: Lock,
+                shortcut: "⌥⇧L",
+                disabled: !contextMenuActionById.lock.enabled,
+                onSelect: toggleSelectedLocked,
+              },
+              ...(contextMenuActionById.link.visible ? [{
+                id: "link",
+                label: "Enlace",
+                icon: Link2,
+                shortcut: "⌘K",
+                disabled: !contextMenuActionById.link.enabled,
+                onSelect: () => openElementMetadataEditor("link"),
+              }] : []),
+              ...(contextMenuActionById.duration.visible ? [{
+                id: "duration",
+                label: "Mostrar la duración del elemento",
+                icon: Clock,
+                disabled: !contextMenuActionById.duration.enabled,
+              }] : []),
+              ...(contextMenuActionById["alt-text"].visible ? [{
+                id: "alt-text",
+                label: "Texto alternativo",
+                icon: Accessibility,
+                disabled: !contextMenuActionById["alt-text"].enabled,
+                onSelect: () => openElementMetadataEditor("altText"),
+              }] : []),
+              ...(contextMenuActionById["magic-text"].visible ? [{
+                id: "magic-text",
+                label: "Texto Mágico",
+                icon: WandSparkles,
+                premium: true,
+                separatorBefore: true,
+                disabled: !contextMenuActionById["magic-text"].enabled,
+              }] : []),
+              ...(contextMenuActionById.translate.visible ? [{
+                id: "translate",
+                label: "Traducir el texto",
+                icon: Languages,
+                premium: true,
+                disabled: !contextMenuActionById.translate.enabled,
+              }] : []),
             ]}
+          />
+        ) : null}
+
+        {elementMetadataEditor ? (
+          <ElementMetadataDialog
+            title={elementMetadataEditor.kind === "link" ? "Enlace del elemento" : "Texto alternativo"}
+            description={
+              elementMetadataEditor.kind === "link"
+                ? "Abre esta URL cuando el diseño se publique en un formato interactivo."
+                : "Describe el elemento para personas que usan tecnologías de asistencia."
+            }
+            label={elementMetadataEditor.kind === "link" ? "URL" : "Descripción"}
+            multiline={elementMetadataEditor.kind === "altText"}
+            value={elementMetadataEditor.value}
+            onChange={(value) => setElementMetadataEditor((current) => current ? { ...current, value } : current)}
+            onCancel={() => setElementMetadataEditor(null)}
+            onSave={saveElementMetadata}
           />
         ) : null}
 

@@ -144,6 +144,23 @@ describe("editor document model", () => {
     })
   })
 
+  it("stores link and alternative text metadata on every element type", () => {
+    const nextId = idSequence()
+    const document = createInitialDocument(nextId)
+    const pageId = document.pages[0].id
+    const shape = createShapeElement("circle", nextId)
+    const withShape = addElementToPage(document, pageId, shape)
+    const updated = updateElement(withShape, pageId, shape.id, {
+      altText: "Circulo decorativo verde",
+      link: "https://example.com/details",
+    })
+
+    expect(findElement(updated, { pageId, elementId: shape.id })).toMatchObject({
+      altText: "Circulo decorativo verde",
+      link: "https://example.com/details",
+    })
+  })
+
   it("creates shapes at a provided drop position", () => {
     const shape = createShapeElement("triangle", () => "shape-1", { x: 128, y: 96 })
 

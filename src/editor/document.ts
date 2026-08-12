@@ -66,6 +66,8 @@ export type ImageMask = "none" | "rounded" | "circle"
 export type BaseElement = {
   id: string
   name: string
+  altText?: string
+  link?: string
   x: number
   y: number
   width: number
