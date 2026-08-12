@@ -2231,6 +2231,24 @@ function EditorApp({
         return
       }
 
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault()
+        openElementMetadataEditor("link")
+        return
+      }
+
+      if (event.altKey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
+        event.preventDefault()
+        setActiveTool("comments")
+        return
+      }
+
+      if (event.altKey && event.shiftKey && event.key.toLowerCase() === "l") {
+        event.preventDefault()
+        toggleSelectedLocked()
+        return
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
         event.preventDefault()
         duplicateSelected()
